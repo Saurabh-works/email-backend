@@ -1,0 +1,83 @@
+{
+  "name": "my-app",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@aws-sdk/client-ses": "^3.774.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.2.0",
+    "@mui/material": "^7.2.0",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.8.4",
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
+    "dns": "^0.2.2",
+    "dotenv": "^16.4.7",
+    "email-validator": "^2.0.4",
+    "email-verifier": "^0.4.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "googleapis": "^148.0.0",
+    "grapesjs": "^0.22.11",
+    "grapesjs-preset-newsletter": "^1.0.2",
+    "imap": "^0.8.19",
+    "imap-simple": "^5.1.0",
+    "json2csv": "^6.0.0-alpha.2",
+    "juice": "^11.0.1",
+    "mailparser": "^3.7.2",
+    "mongodb": "^6.15.0",
+    "mongoose": "^8.12.1",
+    "multer": "^1.4.5-lts.2",
+    "nodemailer": "^6.10.1",
+    "poplib": "^0.1.7",
+    "react": "^19.0.0",
+    "react-confetti": "^6.4.0",
+    "react-dom": "^19.0.0",
+    "react-hot-toast": "^2.5.2",
+    "react-icons": "^5.5.0",
+    "react-router-dom": "^7.4.1",
+    "react-scripts": "5.0.1",
+    "react-toastify": "^11.0.5",
+    "recharts": "^2.15.1",
+    "request-ip": "^3.3.0",
+    "simple-oauth2": "^5.1.0",
+    "smtp-connection": "^4.0.2",
+    "smtp-server": "^3.13.6",
+    "socket.io-client": "^4.8.1",
+    "ua-parser-js": "^2.0.4",
+    "uuid": "^11.1.0",
+    "validator": "^13.12.0",
+    "web-vitals": "^2.1.4",
+    "whois": "^2.14.2",
+    "ws": "^8.18.1",
+    "xlsx": "^0.18.5"
+  },
+  "scripts": {
+    "start": "set HTTPS=true&&set SSL_CRT_FILE=localhost.pem&&set SSL_KEY_FILE=localhost-key.pem&&react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

@@ -53,7 +53,7 @@ const contactApi = require("./contactApi");
 const mailpreviewApi = require('./mailpreviewApi');
 
 const sslOptions = {
-  key: fs.readFileSync(".localhost-key.pem"),
+  key: fs.readFileSync("./localhost-key.pem"),
   cert: fs.readFileSync("./localhost.pem"),
 };
 

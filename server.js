@@ -31,9 +31,9 @@ loadUsers(process.env.LIMITED_USERS, ["single"]);
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const http = require("http");
+// const http = require("http");
 const campaignApi = require("./campaignApi");
-// const https = require('https');
+const https = require('https');
 const RegionStat = require("./models/RegionStats");
 const WebSocket = require("ws");
 const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
@@ -52,15 +52,15 @@ const EmailLog = require("./models/EmailLog");
 const contactApi = require("./contactApi");
 const mailpreviewApi = require('./mailpreviewApi');
 
-// const sslOptions = {
-//   key: fs.readFileSync("C:/Users/Saurabh Shinde/localhost-key.pem"),
-//   cert: fs.readFileSync("C:/Users/Saurabh Shinde/localhost.pem"),
-// };
+const sslOptions = {
+  key: fs.readFileSync(".localhost-key.pem"),
+  cert: fs.readFileSync("./localhost.pem"),
+};
 
 const app = express();
 const PORT = 5000;
-const server = http.createServer(app);
-// const server = https.createServer(sslOptions, app); // changes by saurabh
+// const server = http.createServer(app);
+const server = https.createServer(sslOptions, app); // changes by saurabh
 const wss = new WebSocket.Server({ server });
 
 

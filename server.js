@@ -280,6 +280,9 @@ async function incrementStat(region, type) {
   await RegionStat.updateOne({ region }, { $inc: { [type]: 1 } }, { upsert: true });
 }
 
+app.get('/', (req, res) => {
+  res.send('Backend is running!');
+});
 
 app.post("/send-email", async (req, res) => {
   try {

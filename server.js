@@ -12,7 +12,7 @@ function loadUsers(envString, permissions) {
       userPerms[username] = permissions;
     }
   }
-}
+} 
 
 // Load from .env
 loadUsers(process.env.FULL_USERS, ["single", "bulk"]);

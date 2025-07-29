@@ -31,9 +31,9 @@ loadUsers(process.env.LIMITED_USERS, ["single"]);
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-// const http = require("http");
+const http = require("http");
 const campaignApi = require("./campaignApi");
-const https = require('https');
+// const https = require('https');
 const RegionStat = require("./models/RegionStats");
 const WebSocket = require("ws");
 const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
@@ -52,16 +52,22 @@ const EmailLog = require("./models/EmailLog");
 const contactApi = require("./contactApi");
 const mailpreviewApi = require('./mailpreviewApi');
 
-const sslOptions = {
-  key: fs.readFileSync("./localhost-key.pem"),
-  cert: fs.readFileSync("./localhost.pem"),
-};
+// const sslOptions = {
+//   key: fs.readFileSync("./localhost-key.pem"),
+//   cert: fs.readFileSync("./localhost.pem"),
+// };
+
+// const sslOptions = {
+//   key: fs.readFileSync("C:/Windows/System32/localhost.pem"),
+//   cert: fs.readFileSync("C:/Windows/System32/localhost-key.pem"),
+// };
 
 const app = express();
 const PORT = 5000;
-// const server = http.createServer(app);
-const server = https.createServer(sslOptions, app); // changes by saurabh
+const server = http.createServer(app);
+// const server = https.createServer(sslOptions, app); // changes by saurabh
 const wss = new WebSocket.Server({ server });
+// const ws = new WebSocket.Server({ server });
 
 
 
@@ -106,8 +112,7 @@ const allowedOrigins = [
   "https://localhost:3000",
   "https://truesendr.com",
   "https://truesendr-ui.vercel.app",
-  "https://tall-toys-repair.loca.lt",
-  "https://62f7f0989548.ngrok-free.app",
+  "https://1013284dc860.ngrok-free.app",
 ];
 
 
@@ -127,14 +132,35 @@ const allowedOrigins = [
 //   credentials: true,
 // }));
 
-app.use(cors({
-  origin: allowedOrigins,
+// app.use(cors({
+//   origin: allowedOrigins,
+//   credentials: true,
+//   allowedHeaders: [
+//     "Content-Type",
+//     "ngrok-skip-browser-warning"
+//   ]
+// }));
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.error("⛔ CORS blocked origin:", origin);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
   allowedHeaders: [
     "Content-Type",
+    "Authorization",
     "ngrok-skip-browser-warning"
-  ]
-}));
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // Allow preflight requests
 
 
 

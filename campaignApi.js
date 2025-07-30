@@ -116,12 +116,191 @@ router.get("/track-click", async (req, res) => {
 });
 
 
+// router.post("/send-campaign", async (req, res) => {
+//   const { emailId, subject, body, style, listName } = req.body;
+//   if (!emailId || !subject || !body || !listName)
+//     return res.status(400).json({ error: "Missing fields" });
+
+//   // ✅ Define campaignSchema before use
+//   const campaignSchema = new mongoose.Schema(
+//     {
+//       emailId: String,
+//       subject: String,
+//       totalSent: Number,
+//       totalBounced: Number,
+//       totalOpened: Number,
+//       totalClicked: Number,
+//       totalUnsubscribed: Number,
+//       createdAt: Date,
+//     },
+//     { strict: false }
+//   );
+
+//   try {
+//     const ContactModel = contactConn.model(
+//       listName,
+//       new mongoose.Schema({}, { strict: false }),
+//       listName
+//     );
+//     const recipients = await ContactModel.find({}, { Email: 1, FirstName: 1 });
+
+//     if (!recipients.length)
+//       return res.status(404).json({ error: "No recipients found" });
+
+//     const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
+//     await Campaign.create({
+//       emailId,
+//       subject,
+//       totalSent: recipients.length,
+//       totalBounced: 0,
+//       totalOpened: 0,
+//       totalClicked: 0,
+//       totalUnsubscribed: 0,
+//       createdAt: new Date(),
+//     });
+
+//     res.json({
+//       message: `Campaign ${emailId} initialized`,
+//       totalRecipients: recipients.length,
+//     });
+
+//     const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
+
+//     await PerCampaignModel.insertMany(
+//       recipients.map(({ Email }) => ({
+//         emailId,
+//         recipientId: Email,
+//         type: "sent",
+//         timestamp: new Date(),
+//         count: 0,
+//         ip: "NA",
+//         city: "NA",
+//         region: "NA",
+//         country: "NA",
+//         device: "NA",
+//         browser: "NA",
+//         os: "NA",
+//         bounceStatus: false,
+//         unsubscribe: false,
+//         openCount: 0,
+//         clickCount: 0,
+//         lastClickTime: null,
+//       }))
+//     );
+
+//     await Log.insertMany(
+//       recipients.map(({ Email }) => ({
+//         emailId,
+//         recipientId: Email,
+//         type: "sent",
+//         timestamp: new Date(),
+//         count: 0,
+//         bounceStatus: false,
+//       }))
+//     );
+
+//     for (const { Email: to, FirstName } of recipients) {
+//       if (!to) continue;
+
+//       let validation = { category: "valid" };
+//       try {
+//         validation = await validateSMTP(to);
+//       } catch (err) {
+//         console.error(`SMTP validation failed for ${to}:`, err.message);
+//       }
+
+//       const bounceStatus = validation.category === "invalid";
+
+//       const pixelUrl = `http://localhost:5000/api/campaign/track-pixel?emailId=${encodeURIComponent(
+//         emailId
+//       )}&recipientId=${encodeURIComponent(to)}&t=${Date.now()}`;
+//       const clickUrl = `http://localhost:5000/api/campaign/track-click?emailId=${encodeURIComponent(
+//         emailId
+//       )}&recipientId=${encodeURIComponent(to)}`;
+//       const unsubscribeUrl = `http://localhost:5000/api/campaign/track-unsubscribe?emailId=${encodeURIComponent(
+//         emailId
+//       )}&recipientId=${encodeURIComponent(to)}`;
+
+//       // 💡 Wrap your template body with <style> tag to merge style
+//       let fullHtml = `
+// <!DOCTYPE html>
+// <html>
+//   <head>
+//     <meta charset="UTF-8" />
+//     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+//     <title>${subject}</title>
+//     <style>${style || ""}</style>  <!-- Inject GrapesJS CSS here -->
+//   </head>
+//   <body>
+//     ${body}
+//   </body>
+// </html>
+// `;
+
+//       // 🔥 Replace placeholders
+//       fullHtml = fullHtml
+//         .replace(/{{firstName}}/g, FirstName || "there")
+//         .replace(/{{unsubscribeUrl}}/g, unsubscribeUrl)
+//         .replace(/{{trackingPixelUrl}}/g, pixelUrl)
+//         .replace(/{{clickUrl}}/g, clickUrl); // 👈 insert here
+
+//       // 🧃 Inline styles
+//       const htmlBody = juice(fullHtml);
+
+//       const params = {
+//         Destination: { ToAddresses: [to] },
+//         Message: {
+//           Body: { Html: { Charset: "UTF-8", Data: htmlBody } },
+//           Subject: { Charset: "UTF-8", Data: subject },
+//         },
+//         Source: process.env.FROM_EMAIL,
+//         Tags: [{ Name: "campaign", Value: emailId }],
+//       };
+
+//       try {
+//         await sesClient.send(new SendEmailCommand(params));
+//         console.log(`✅ Email sent to ${to}`);
+
+//         if (bounceStatus) {
+//           await Promise.all([
+//             PerCampaignModel.updateOne(
+//               { recipientId: to },
+//               { $set: { bounceStatus: true } }
+//             ),
+//             Log.updateOne(
+//               { emailId, recipientId: to },
+//               { $set: { bounceStatus: true } }
+//             ),
+//           ]);
+//         }
+//       } catch (err) {
+//         console.error(`❌ Failed to send to ${to}:`, err.message);
+//         if (bounceStatus) {
+//           await Promise.all([
+//             PerCampaignModel.updateOne(
+//               { recipientId: to },
+//               { $set: { bounceStatus: true } }
+//             ),
+//             Log.updateOne(
+//               { emailId, recipientId: to },
+//               { $set: { bounceStatus: true } }
+//             ),
+//           ]);
+//         }
+//       }
+//     }
+//   } catch (err) {
+//     console.error("❌ /send-campaign error:", err);
+//     res.status(500).json({ error: "Failed to send campaign" });
+//   }
+// });
+
+
 router.post("/send-campaign", async (req, res) => {
   const { emailId, subject, body, style, listName } = req.body;
   if (!emailId || !subject || !body || !listName)
     return res.status(400).json({ error: "Missing fields" });
 
-  // ✅ Define campaignSchema before use
   const campaignSchema = new mongoose.Schema(
     {
       emailId: String,
@@ -202,26 +381,16 @@ router.post("/send-campaign", async (req, res) => {
     for (const { Email: to, FirstName } of recipients) {
       if (!to) continue;
 
-      let validation = { category: "valid" };
-      try {
-        validation = await validateSMTP(to);
-      } catch (err) {
-        console.error(`SMTP validation failed for ${to}:`, err.message);
-      }
-
-      const bounceStatus = validation.category === "invalid";
-
-      const pixelUrl = `http://localhost:5000/api/campaign/track-pixel?emailId=${encodeURIComponent(
+      const pixelUrl = `https://truenotsendr.com/api/campaign/track-pixel?emailId=${encodeURIComponent(
         emailId
       )}&recipientId=${encodeURIComponent(to)}&t=${Date.now()}`;
-      const clickUrl = `http://localhost:5000/api/campaign/track-click?emailId=${encodeURIComponent(
+      const clickUrl = `https://truenotsendr.com/api/campaign/track-click?emailId=${encodeURIComponent(
         emailId
       )}&recipientId=${encodeURIComponent(to)}`;
-      const unsubscribeUrl = `http://localhost:5000/api/campaign/track-unsubscribe?emailId=${encodeURIComponent(
+      const unsubscribeUrl = `https://truenotsendr.com/api/campaign/track-unsubscribe?emailId=${encodeURIComponent(
         emailId
       )}&recipientId=${encodeURIComponent(to)}`;
 
-      // 💡 Wrap your template body with <style> tag to merge style
       let fullHtml = `
 <!DOCTYPE html>
 <html>
@@ -229,7 +398,7 @@ router.post("/send-campaign", async (req, res) => {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${subject}</title>
-    <style>${style || ""}</style>  <!-- Inject GrapesJS CSS here -->
+    <style>${style || ""}</style>
   </head>
   <body>
     ${body}
@@ -237,14 +406,12 @@ router.post("/send-campaign", async (req, res) => {
 </html>
 `;
 
-      // 🔥 Replace placeholders
       fullHtml = fullHtml
         .replace(/{{firstName}}/g, FirstName || "there")
         .replace(/{{unsubscribeUrl}}/g, unsubscribeUrl)
         .replace(/{{trackingPixelUrl}}/g, pixelUrl)
-        .replace(/{{clickUrl}}/g, clickUrl); // 👈 insert here
+        .replace(/{{clickUrl}}/g, clickUrl);
 
-      // 🧃 Inline styles
       const htmlBody = juice(fullHtml);
 
       const params = {
@@ -260,33 +427,8 @@ router.post("/send-campaign", async (req, res) => {
       try {
         await sesClient.send(new SendEmailCommand(params));
         console.log(`✅ Email sent to ${to}`);
-
-        if (bounceStatus) {
-          await Promise.all([
-            PerCampaignModel.updateOne(
-              { recipientId: to },
-              { $set: { bounceStatus: true } }
-            ),
-            Log.updateOne(
-              { emailId, recipientId: to },
-              { $set: { bounceStatus: true } }
-            ),
-          ]);
-        }
       } catch (err) {
         console.error(`❌ Failed to send to ${to}:`, err.message);
-        if (bounceStatus) {
-          await Promise.all([
-            PerCampaignModel.updateOne(
-              { recipientId: to },
-              { $set: { bounceStatus: true } }
-            ),
-            Log.updateOne(
-              { emailId, recipientId: to },
-              { $set: { bounceStatus: true } }
-            ),
-          ]);
-        }
       }
     }
   } catch (err) {
@@ -294,6 +436,7 @@ router.post("/send-campaign", async (req, res) => {
     res.status(500).json({ error: "Failed to send campaign" });
   }
 });
+
 
 router.post("/mark-bounce", async (req, res) => {
   const { emailId, recipientId } = req.body;

@@ -112,7 +112,9 @@ const allowedOrigins = [
   "https://localhost:3000",
   "https://truesendr.com",
   "https://truesendr-ui.vercel.app",
-  "https://1013284dc860.ngrok-free.app",
+  "https://77fd70c33625.ngrok-free.app",
+  "https://13.218.96.234:5000",
+  "https://truenotsendr.com"
 ];
 
 

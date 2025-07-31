@@ -63,6 +63,8 @@ const mailpreviewApi = require('./mailpreviewApi');
 // };
 
 const app = express();
+app.set('trust proxy', true); // ✅ Add this line it should forward the original visitor IP
+
 const PORT = 5000;
 const server = http.createServer(app);
 // const server = https.createServer(sslOptions, app); // changes by saurabh
@@ -164,7 +166,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // Allow preflight requests
 
-app.set('trust proxy', true); // ✅ Add this line it should forward the original visitor IP
 
 
 

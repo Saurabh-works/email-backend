@@ -746,5 +746,15 @@ router.get("/campaign-csv", async (req, res) => {
 });
 
 
+router.get('/myip', (req, res) => {
+  res.send({
+    ip: req.ip,
+    realIp: req.headers['x-forwarded-for'],
+    allHeaders: req.headers,
+  });
+});
+
+
+
 
 module.exports = router;

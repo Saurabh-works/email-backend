@@ -1,8 +1,8 @@
 require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
-const AWS = require('aws-sdk');
-AWS.config.update({ region: process.env.FORCE_SES_REGION || 'us-east-1' });
+// const AWS = require('aws-sdk');
+// AWS.config.update({ region: process.env.FORCE_SES_REGION || 'us-east-1' });
 const requestIp = require("request-ip");
 const uaParser = require("ua-parser-js");
 const axios = require("axios");
@@ -35,7 +35,8 @@ logSchema.index({ emailId: 1, recipientId: 1, type: 1 }, { unique: true });
 const Log = campaignConn.model("Log", logSchema);
 
 const sesClient = new SESClient({
-  region: process.env.AWS_REGION,
+  // region: process.env.AWS_REGION,
+  region: process.env.FORCE_SES_REGION,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,

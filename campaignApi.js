@@ -1,6 +1,8 @@
 require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
+const AWS = require('aws-sdk');
+AWS.config.update({ region: process.env.FORCE_SES_REGION || 'us-east-1' });
 const requestIp = require("request-ip");
 const uaParser = require("ua-parser-js");
 const axios = require("axios");

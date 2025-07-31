@@ -164,6 +164,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // Allow preflight requests
 
+app.set('trust proxy', true); // ✅ Add this line it should forward the original visitor IP
 
 
 
@@ -722,7 +723,6 @@ function waitForValidation(email, timeout = 12000) {
   });
 }
 
-app.set('trust proxy', true); // ✅ Add this line it should forward the original visitor IP
 
 // from this saurabh's code start
 

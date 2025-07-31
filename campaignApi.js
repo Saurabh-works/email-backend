@@ -43,10 +43,23 @@ const sesClient = new SESClient({
   },
 });
 
+function getRealIp(req) {
+  const xfwd = req.headers["x-forwarded-for"];
+  if (xfwd) return xfwd.split(",")[0].trim();
+  return (
+    requestIp.getClientIp(req) ||
+    req.connection?.remoteAddress ||
+    req.socket?.remoteAddress ||
+    ""
+  );
+}
+
+
 const isBot = (ua) => /bot|crawler|preview|headless/i.test(ua);
 
 async function logEvent(req, type) {
-  const ip = requestIp.getClientIp(req) || "";
+  // const ip = requestIp.getClientIp(req) || "";
+  const ip = getRealIp(req);
   const ua = req.headers["user-agent"] || "";
   const { emailId, recipientId } = req.query;
   if (!emailId || !recipientId || isBot(ua)) return;

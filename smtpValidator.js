@@ -25,41 +25,51 @@ function getUsername(email) {
 }
 
 async function smtpCheck(email, mxHost) {
-  return await new Promise((resolve) => {
-    const connection = new SMTPConnection({
-      host: mxHost,
-      port: 25,
-      secure: false,
-      tls: { rejectUnauthorized: false },
-      socketTimeout: 10000,
-    });
-
-    connection.on("error", (err) => {
-      console.error(`SMTP error for ${email}:`, err.message);
-      resolve(false);
-    });
-
-    connection.connect(() => {
-      connection.login({}, () => {
-        connection.send(
-          {
-            from: "validator@" + getDomain(email),
-            to: [email],
-          },
-          "",
-          (err) => {
-            connection.quit();
-            if (err && err.code === "EENVELOPE") {
-              resolve(false); // recipient rejected
-            } else {
-              resolve(true); // accepted
-            }
-          }
-        );
+  return await Promise.race([
+    new Promise((resolve) => {
+      const connection = new SMTPConnection({
+        host: mxHost,
+        port: parseInt(process.env.AWS_SMTP_PORT || "587"),
+        requireTLS: true,
+        tls: { rejectUnauthorized: false },
+        socketTimeout: 10000,
       });
-    });
-  });
+
+      connection.on("error", (err) => {
+        console.error(`SMTP error for ${email}:`, err.message);
+        resolve(false);
+      });
+
+      connection.connect(() => {
+        connection.login({}, () => {
+          connection.send(
+            {
+              from: "validator@" + getDomain(email),
+              to: [email],
+            },
+            "",
+            (err) => {
+              connection.quit();
+              if (err && err.code === "EENVELOPE") {
+                resolve(false); // recipient rejected
+              } else {
+                resolve(true); // accepted
+              }
+            }
+          );
+        });
+      });
+    }),
+
+    new Promise((resolve) =>
+      setTimeout(() => {
+        console.warn(`SMTP timeout for ${email}`);
+        resolve(false);
+      }, 12000)
+    )
+  ]);
 }
+
 
 async function validateSMTP(email) {
   const domain = getDomain(email);

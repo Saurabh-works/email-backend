@@ -286,169 +286,169 @@
 
 
 // changes for aws
-// const dns = require("dns").promises;
-// const SMTPConnection = require("smtp-connection");
-// const fs = require("fs");
-// const path = require("path");
+const dns = require("dns").promises;
+const SMTPConnection = require("smtp-connection");
+const fs = require("fs");
+const path = require("path");
 
-// // Load disposable domains
-// const disposableDomains = fs
-//   .readFileSync(path.join(__dirname, "disposable_email_list.txt"), "utf8")
-//   .split(/\r?\n/)
-//   .filter(Boolean);
+// Load disposable domains
+const disposableDomains = fs
+  .readFileSync(path.join(__dirname, "disposable_email_list.txt"), "utf8")
+  .split(/\r?\n/)
+  .filter(Boolean);
 
-// const roleBasedUsernames = [
-//   "admin", "support", "info", "contact", "help",
-//   "sales", "marketing", "billing", "hr", "careers", "finance"
-// ];
+const roleBasedUsernames = [
+  "admin", "support", "info", "contact", "help",
+  "sales", "marketing", "billing", "hr", "careers", "finance"
+];
 
-// const freeEmailDomains = [
-//   "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com"
-// ];
+const freeEmailDomains = [
+  "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com"
+];
 
-// function getDomain(email) {
-//   return email.split("@")[1].toLowerCase();
-// }
+function getDomain(email) {
+  return email.split("@")[1].toLowerCase();
+}
 
-// function getUsername(email) {
-//   return email.split("@")[0].toLowerCase();
-// }
+function getUsername(email) {
+  return email.split("@")[0].toLowerCase();
+}
 
-// // Dummy domain bounce rate tracker — replace with DB or cache lookup
-// const domainBounceRates = {
-//   "nextbike.net": 1.0,
-//   "demandmediabpm.com": 0.4,
-// };
+// Dummy domain bounce rate tracker — replace with DB or cache lookup
+const domainBounceRates = {
+  "nextbike.net": 1.0,
+  "demandmediabpm.com": 0.4,
+};
 
-// function shouldSkipDomain(domain) {
-//   const bounceRate = domainBounceRates[domain] || 0;
-//   return bounceRate >= 0.8;
-// }
+function shouldSkipDomain(domain) {
+  const bounceRate = domainBounceRates[domain] || 0;
+  return bounceRate >= 0.8;
+}
 
-// async function smtpCheck(email, mxHost, timeout = 5000) {
-//   return await Promise.race([
-//     new Promise((resolve) => {
-//       const connection = new SMTPConnection({
-//         host: mxHost,
-//         port: parseInt(process.env.AWS_SMTP_PORT || "587"),
-//         requireTLS: true,
-//         tls: { rejectUnauthorized: false },
-//         socketTimeout: timeout - 500, // prevent double timeout with race
-//       });
+async function smtpCheck(email, mxHost, timeout = 5000) {
+  return await Promise.race([
+    new Promise((resolve) => {
+      const connection = new SMTPConnection({
+        host: mxHost,
+        port: parseInt(process.env.AWS_SMTP_PORT || "587"),
+        requireTLS: true,
+        tls: { rejectUnauthorized: false },
+        socketTimeout: timeout - 500, // prevent double timeout with race
+      });
 
-//       connection.on("error", (err) => {
-//         console.error(`SMTP error for ${email}:`, err.message);
-//         resolve(null); // timeout or other failure
-//       });
+      connection.on("error", (err) => {
+        console.error(`SMTP error for ${email}:`, err.message);
+        resolve(null); // timeout or other failure
+      });
 
-//       connection.connect(() => {
-//         connection.login({}, () => {
-//           connection.send(
-//             {
-//               from: "validator@" + getDomain(email),
-//               to: [email],
-//             },
-//             "",
-//             (err) => {
-//               connection.quit();
-//               if (err && err.code === "EENVELOPE") {
-//                 resolve(false);
-//               } else {
-//                 resolve(true);
-//               }
-//             }
-//           );
-//         });
-//       });
-//     }),
+      connection.connect(() => {
+        connection.login({}, () => {
+          connection.send(
+            {
+              from: "validator@" + getDomain(email),
+              to: [email],
+            },
+            "",
+            (err) => {
+              connection.quit();
+              if (err && err.code === "EENVELOPE") {
+                resolve(false);
+              } else {
+                resolve(true);
+              }
+            }
+          );
+        });
+      });
+    }),
 
-//     new Promise((resolve) =>
-//       setTimeout(() => {
-//         console.warn(`⏱️ SMTP timeout for ${email}`);
-//         resolve(null);
-//       }, timeout)
-//     ),
-//   ]);
-// }
+    new Promise((resolve) =>
+      setTimeout(() => {
+        console.warn(`⏱️ SMTP timeout for ${email}`);
+        resolve(null);
+      }, timeout)
+    ),
+  ]);
+}
 
-// async function validateSMTP(email) {
-//   const domain = getDomain(email);
-//   const username = getUsername(email);
+async function validateSMTP(email) {
+  const domain = getDomain(email);
+  const username = getUsername(email);
 
-//   let isValid = null;
-//   let isCatchAll = false;
+  let isValid = null;
+  let isCatchAll = false;
 
-//   // Skip validation for bad domain
-//   if (shouldSkipDomain(domain)) {
-//     console.log(`🚫 Skipping email from bad domain (${domain}), bounceRate: ${domainBounceRates[domain]}`);
-//     return {
-//       email,
-//       smtp: null,
-//       catchAll: false,
-//       isDisposable: disposableDomains.includes(domain),
-//       isFree: freeEmailDomains.includes(domain),
-//       isRoleBased: roleBasedUsernames.includes(username),
-//       domain,
-//       category: "unknown",
-//       status: "❔ Skipped (High Bounce)",
-//       score: 0,
-//     };
-//   }
+  // Skip validation for bad domain
+  if (shouldSkipDomain(domain)) {
+    console.log(`🚫 Skipping email from bad domain (${domain}), bounceRate: ${domainBounceRates[domain]}`);
+    return {
+      email,
+      smtp: null,
+      catchAll: false,
+      isDisposable: disposableDomains.includes(domain),
+      isFree: freeEmailDomains.includes(domain),
+      isRoleBased: roleBasedUsernames.includes(username),
+      domain,
+      category: "unknown",
+      status: "❔ Skipped (High Bounce)",
+      score: 0,
+    };
+  }
 
-//   try {
-//     const mxRecords = await dns.resolveMx(domain);
-//     if (!mxRecords.length) throw new Error("No MX records found");
-//     mxRecords.sort((a, b) => a.priority - b.priority);
-//     const mxHost = mxRecords[0].exchange;
+  try {
+    const mxRecords = await dns.resolveMx(domain);
+    if (!mxRecords.length) throw new Error("No MX records found");
+    mxRecords.sort((a, b) => a.priority - b.priority);
+    const mxHost = mxRecords[0].exchange;
 
-//     isValid = await smtpCheck(email, mxHost, 5000);
+    isValid = await smtpCheck(email, mxHost, 5000);
 
-//     const fakeEmail = `randomcheck${Date.now()}@${domain}`;
-//     isCatchAll = await smtpCheck(fakeEmail, mxHost, 5000);
-//   } catch (err) {
-//     console.warn(`DNS or SMTP failed for ${email}:`, err.message);
-//   }
+    const fakeEmail = `randomcheck${Date.now()}@${domain}`;
+    isCatchAll = await smtpCheck(fakeEmail, mxHost, 5000);
+  } catch (err) {
+    console.warn(`DNS or SMTP failed for ${email}:`, err.message);
+  }
 
-//   const isDisposable = disposableDomains.includes(domain);
-//   const isFree = freeEmailDomains.includes(domain);
-//   const isRoleBased = roleBasedUsernames.includes(username);
+  const isDisposable = disposableDomains.includes(domain);
+  const isFree = freeEmailDomains.includes(domain);
+  const isRoleBased = roleBasedUsernames.includes(username);
 
-//   // Scoring
-//   let score = 100;
-//   if (isValid === false) score -= 50;
-//   if (isCatchAll) score -= 20;
-//   if (isDisposable) score -= 40;
-//   if (isFree) score -= 10;
-//   if (isRoleBased) score -= 10;
-//   if (score < 0) score = 0;
+  // Scoring
+  let score = 100;
+  if (isValid === false) score -= 50;
+  if (isCatchAll) score -= 20;
+  if (isDisposable) score -= 40;
+  if (isFree) score -= 10;
+  if (isRoleBased) score -= 10;
+  if (score < 0) score = 0;
 
-//   let category, status;
-//   if (isValid === true && !isCatchAll) {
-//     category = "valid";
-//     status = "✅ Valid";
-//   } else if (isValid === true && isCatchAll) {
-//     category = "risky";
-//     status = "⚠️ Risky (Catch-All)";
-//   } else if (isValid === null) {
-//     category = "unknown";
-//     status = "❔ Unknown (Timeout)";
-//   } else {
-//     category = "invalid";
-//     status = "❌ Invalid";
-//   }
+  let category, status;
+  if (isValid === true && !isCatchAll) {
+    category = "valid";
+    status = "✅ Valid";
+  } else if (isValid === true && isCatchAll) {
+    category = "risky";
+    status = "⚠️ Risky (Catch-All)";
+  } else if (isValid === null) {
+    category = "unknown";
+    status = "❔ Unknown (Timeout)";
+  } else {
+    category = "invalid";
+    status = "❌ Invalid";
+  }
 
-//   return {
-//     email,
-//     smtp: isValid,
-//     catchAll: isCatchAll,
-//     isDisposable,
-//     isFree,
-//     isRoleBased,
-//     domain,
-//     category,
-//     status,
-//     score,
-//   };
-// }
+  return {
+    email,
+    smtp: isValid,
+    catchAll: isCatchAll,
+    isDisposable,
+    isFree,
+    isRoleBased,
+    domain,
+    category,
+    status,
+    score,
+  };
+}
 
-// module.exports = { validateSMTP };
+module.exports = { validateSMTP };

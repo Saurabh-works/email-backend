@@ -283,15 +283,11 @@
 
 
 
-
-
-// changes for aws
 const dns = require("dns").promises;
 const SMTPConnection = require("smtp-connection");
 const fs = require("fs");
 const path = require("path");
 
-// Load disposable domains
 const disposableDomains = fs
   .readFileSync(path.join(__dirname, "disposable_email_list.txt"), "utf8")
   .split(/\r?\n/)
@@ -306,6 +302,12 @@ const freeEmailDomains = [
   "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com"
 ];
 
+// Replace this with real DB/cache in production
+const domainBounceRates = {
+  "nextbike.net": 1.0,
+  "demandmediabpm.com": 0.4,
+};
+
 function getDomain(email) {
   return email.split("@")[1].toLowerCase();
 }
@@ -313,12 +315,6 @@ function getDomain(email) {
 function getUsername(email) {
   return email.split("@")[0].toLowerCase();
 }
-
-// Dummy domain bounce rate tracker — replace with DB or cache lookup
-const domainBounceRates = {
-  "nextbike.net": 1.0,
-  "demandmediabpm.com": 0.4,
-};
 
 function shouldSkipDomain(domain) {
   const bounceRate = domainBounceRates[domain] || 0;
@@ -330,15 +326,15 @@ async function smtpCheck(email, mxHost, timeout = 5000) {
     new Promise((resolve) => {
       const connection = new SMTPConnection({
         host: mxHost,
-        port: parseInt(process.env.AWS_SMTP_PORT || "587"),
+        port: parseInt(process.env.AWS_SMTP_PORT || "25"), // ✅ Fallback to port 25
         requireTLS: true,
         tls: { rejectUnauthorized: false },
-        socketTimeout: timeout - 500, // prevent double timeout with race
+        socketTimeout: timeout - 500,
       });
 
       connection.on("error", (err) => {
         console.error(`SMTP error for ${email}:`, err.message);
-        resolve(null); // timeout or other failure
+        resolve(null); // Timeout or failure
       });
 
       connection.connect(() => {
@@ -352,9 +348,9 @@ async function smtpCheck(email, mxHost, timeout = 5000) {
             (err) => {
               connection.quit();
               if (err && err.code === "EENVELOPE") {
-                resolve(false);
+                resolve(false); // Invalid
               } else {
-                resolve(true);
+                resolve(true); // Valid
               }
             }
           );
@@ -365,7 +361,7 @@ async function smtpCheck(email, mxHost, timeout = 5000) {
     new Promise((resolve) =>
       setTimeout(() => {
         console.warn(`⏱️ SMTP timeout for ${email}`);
-        resolve(null);
+        resolve(null); // timeout fallback
       }, timeout)
     ),
   ]);
@@ -375,12 +371,9 @@ async function validateSMTP(email) {
   const domain = getDomain(email);
   const username = getUsername(email);
 
-  let isValid = null;
-  let isCatchAll = false;
-
-  // Skip validation for bad domain
+  // 👇 Skipping high-bounce domains
   if (shouldSkipDomain(domain)) {
-    console.log(`🚫 Skipping email from bad domain (${domain}), bounceRate: ${domainBounceRates[domain]}`);
+    console.log(`🚫 Skipping ${email} due to bounceRate`);
     return {
       email,
       smtp: null,
@@ -395,25 +388,33 @@ async function validateSMTP(email) {
     };
   }
 
+  let isValid = null;
+  let isCatchAll = false;
+  let mxHost = null;
+
   try {
     const mxRecords = await dns.resolveMx(domain);
     if (!mxRecords.length) throw new Error("No MX records found");
     mxRecords.sort((a, b) => a.priority - b.priority);
-    const mxHost = mxRecords[0].exchange;
+    mxHost = mxRecords[0].exchange;
 
-    isValid = await smtpCheck(email, mxHost, 5000);
+    // ✅ Validate real and fake email in parallel
+    const [validResult, catchAllResult] = await Promise.all([
+      smtpCheck(email, mxHost, 5000),
+      smtpCheck(`randomcheck${Date.now()}@${domain}`, mxHost, 5000),
+    ]);
 
-    const fakeEmail = `randomcheck${Date.now()}@${domain}`;
-    isCatchAll = await smtpCheck(fakeEmail, mxHost, 5000);
+    isValid = validResult;
+    isCatchAll = catchAllResult === true;
   } catch (err) {
     console.warn(`DNS or SMTP failed for ${email}:`, err.message);
+    // Optional: log or retry here
   }
 
   const isDisposable = disposableDomains.includes(domain);
   const isFree = freeEmailDomains.includes(domain);
   const isRoleBased = roleBasedUsernames.includes(username);
 
-  // Scoring
   let score = 100;
   if (isValid === false) score -= 50;
   if (isCatchAll) score -= 20;
@@ -422,17 +423,16 @@ async function validateSMTP(email) {
   if (isRoleBased) score -= 10;
   if (score < 0) score = 0;
 
-  let category, status;
+  let category = "unknown";
+  let status = "❔ Unknown (Timeout)";
+
   if (isValid === true && !isCatchAll) {
     category = "valid";
     status = "✅ Valid";
   } else if (isValid === true && isCatchAll) {
     category = "risky";
     status = "⚠️ Risky (Catch-All)";
-  } else if (isValid === null) {
-    category = "unknown";
-    status = "❔ Unknown (Timeout)";
-  } else {
+  } else if (isValid === false) {
     category = "invalid";
     status = "❌ Invalid";
   }
@@ -452,3 +452,4 @@ async function validateSMTP(email) {
 }
 
 module.exports = { validateSMTP };
+

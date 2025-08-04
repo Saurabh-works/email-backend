@@ -315,6 +315,7 @@ app.get("/", (req, res) => {
 });
 
 app.post("/send-email", async (req, res) => {
+  console.log("🛰️ Request Origin:", req.headers.origin);
   try {
     const { email, sessionId } = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 

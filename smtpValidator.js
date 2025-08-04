@@ -137,13 +137,12 @@
 // module.exports = { validateSMTP };
  
 
-
 const dns = require("dns").promises;
 const SMTPConnection = require("smtp-connection");
 const fs = require("fs");
 const path = require("path");
 
-// ✅ Load a list of disposable domains
+// Load disposable domains
 const disposableDomains = fs
   .readFileSync(path.join(__dirname, "disposable_email_list.txt"), "utf8")
   .split(/\r?\n/)
@@ -166,7 +165,18 @@ function getUsername(email) {
   return email.split("@")[0].toLowerCase();
 }
 
-async function smtpCheck(email, mxHost, timeout = 10000) {
+// Dummy domain bounce rate tracker — replace with DB or cache lookup
+const domainBounceRates = {
+  "nextbike.net": 1.0,
+  "demandmediabpm.com": 0.4,
+};
+
+function shouldSkipDomain(domain) {
+  const bounceRate = domainBounceRates[domain] || 0;
+  return bounceRate >= 0.8;
+}
+
+async function smtpCheck(email, mxHost, timeout = 5000) {
   return await Promise.race([
     new Promise((resolve) => {
       const connection = new SMTPConnection({
@@ -174,12 +184,12 @@ async function smtpCheck(email, mxHost, timeout = 10000) {
         port: parseInt(process.env.AWS_SMTP_PORT || "587"),
         requireTLS: true,
         tls: { rejectUnauthorized: false },
-        socketTimeout: timeout,
+        socketTimeout: timeout - 500, // prevent double timeout with race
       });
 
       connection.on("error", (err) => {
         console.error(`SMTP error for ${email}:`, err.message);
-        resolve(null); // mark as unknown
+        resolve(null); // timeout or other failure
       });
 
       connection.connect(() => {
@@ -193,9 +203,9 @@ async function smtpCheck(email, mxHost, timeout = 10000) {
             (err) => {
               connection.quit();
               if (err && err.code === "EENVELOPE") {
-                resolve(false); // rejected
+                resolve(false);
               } else {
-                resolve(true); // accepted
+                resolve(true);
               }
             }
           );
@@ -206,17 +216,35 @@ async function smtpCheck(email, mxHost, timeout = 10000) {
     new Promise((resolve) =>
       setTimeout(() => {
         console.warn(`⏱️ SMTP timeout for ${email}`);
-        resolve(null); // timeout fallback
+        resolve(null);
       }, timeout)
-    )
+    ),
   ]);
 }
 
 async function validateSMTP(email) {
   const domain = getDomain(email);
   const username = getUsername(email);
+
   let isValid = null;
   let isCatchAll = false;
+
+  // Skip validation for bad domain
+  if (shouldSkipDomain(domain)) {
+    console.log(`🚫 Skipping email from bad domain (${domain}), bounceRate: ${domainBounceRates[domain]}`);
+    return {
+      email,
+      smtp: null,
+      catchAll: false,
+      isDisposable: disposableDomains.includes(domain),
+      isFree: freeEmailDomains.includes(domain),
+      isRoleBased: roleBasedUsernames.includes(username),
+      domain,
+      category: "unknown",
+      status: "❔ Skipped (High Bounce)",
+      score: 0,
+    };
+  }
 
   try {
     const mxRecords = await dns.resolveMx(domain);
@@ -224,10 +252,10 @@ async function validateSMTP(email) {
     mxRecords.sort((a, b) => a.priority - b.priority);
     const mxHost = mxRecords[0].exchange;
 
-    isValid = await smtpCheck(email, mxHost);
+    isValid = await smtpCheck(email, mxHost, 5000);
 
     const fakeEmail = `randomcheck${Date.now()}@${domain}`;
-    isCatchAll = await smtpCheck(fakeEmail, mxHost);
+    isCatchAll = await smtpCheck(fakeEmail, mxHost, 5000);
   } catch (err) {
     console.warn(`DNS or SMTP failed for ${email}:`, err.message);
   }
@@ -236,7 +264,7 @@ async function validateSMTP(email) {
   const isFree = freeEmailDomains.includes(domain);
   const isRoleBased = roleBasedUsernames.includes(username);
 
-  // 🔢 Scoring
+  // Scoring
   let score = 100;
   if (isValid === false) score -= 50;
   if (isCatchAll) score -= 20;
@@ -245,9 +273,7 @@ async function validateSMTP(email) {
   if (isRoleBased) score -= 10;
   if (score < 0) score = 0;
 
-  // 🧠 Category
   let category, status;
-
   if (isValid === true && !isCatchAll) {
     category = "valid";
     status = "✅ Valid";
@@ -272,9 +298,8 @@ async function validateSMTP(email) {
     domain,
     category,
     status,
-    score
+    score,
   };
 }
 
 module.exports = { validateSMTP };
-

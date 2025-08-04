@@ -302,7 +302,6 @@ const freeEmailDomains = [
   "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com"
 ];
 
-// Replace this with real DB/cache in production
 const domainBounceRates = {
   "nextbike.net": 1.0,
   "demandmediabpm.com": 0.4,
@@ -326,7 +325,7 @@ async function smtpCheck(email, mxHost, timeout = 5000) {
     new Promise((resolve) => {
       const connection = new SMTPConnection({
         host: mxHost,
-        port: parseInt(process.env.AWS_SMTP_PORT || "25"), // ✅ Fallback to port 25
+        port: parseInt(process.env.AWS_SMTP_PORT || "25"),
         requireTLS: true,
         tls: { rejectUnauthorized: false },
         socketTimeout: timeout - 500,
@@ -334,7 +333,7 @@ async function smtpCheck(email, mxHost, timeout = 5000) {
 
       connection.on("error", (err) => {
         console.error(`SMTP error for ${email}:`, err.message);
-        resolve(null); // Timeout or failure
+        resolve(null);
       });
 
       connection.connect(() => {
@@ -348,20 +347,19 @@ async function smtpCheck(email, mxHost, timeout = 5000) {
             (err) => {
               connection.quit();
               if (err && err.code === "EENVELOPE") {
-                resolve(false); // Invalid
+                resolve(false);
               } else {
-                resolve(true); // Valid
+                resolve(true);
               }
             }
           );
         });
       });
     }),
-
     new Promise((resolve) =>
       setTimeout(() => {
         console.warn(`⏱️ SMTP timeout for ${email}`);
-        resolve(null); // timeout fallback
+        resolve(null);
       }, timeout)
     ),
   ]);
@@ -371,7 +369,6 @@ async function validateSMTP(email) {
   const domain = getDomain(email);
   const username = getUsername(email);
 
-  // 👇 Skipping high-bounce domains
   if (shouldSkipDomain(domain)) {
     console.log(`🚫 Skipping ${email} due to bounceRate`);
     return {
@@ -398,19 +395,26 @@ async function validateSMTP(email) {
     mxRecords.sort((a, b) => a.priority - b.priority);
     mxHost = mxRecords[0].exchange;
 
-    // ✅ Validate real and fake email in parallel
-    const [validResult, catchAllResult] = await Promise.all([
-      smtpCheck(email, mxHost, 5000),
-      smtpCheck(`randomcheck${Date.now()}@${domain}`, mxHost, 5000),
-    ]);
+    // 1. Check actual email first
+    isValid = await smtpCheck(email, mxHost, 5000);
 
-    isValid = validResult;
-    isCatchAll = catchAllResult === true;
+    // 2. Early return if clearly invalid
+    if (isValid === false) {
+      return buildResult(email, domain, username, false, false);
+    }
+
+    // 3. Catch-all check only if not invalid
+    const isCatchAll = await smtpCheck(`randomcheck${Date.now()}@${domain}`, mxHost, 7000) === true;
+
+    return buildResult(email, domain, username, isValid, isCatchAll);
+
   } catch (err) {
     console.warn(`DNS or SMTP failed for ${email}:`, err.message);
-    // Optional: log or retry here
+    return buildResult(email, domain, username, null, false);
   }
+}
 
+function buildResult(email, domain, username, isValid, isCatchAll) {
   const isDisposable = disposableDomains.includes(domain);
   const isFree = freeEmailDomains.includes(domain);
   const isRoleBased = roleBasedUsernames.includes(username);
@@ -452,4 +456,5 @@ async function validateSMTP(email) {
 }
 
 module.exports = { validateSMTP };
+
 

@@ -279,10 +279,6 @@
 
 
 
-
-
-
-
 const dns = require("dns").promises;
 const SMTPConnection = require("smtp-connection");
 const fs = require("fs");
@@ -325,8 +321,8 @@ async function smtpCheck(email, mxHost, timeout = 5000) {
     new Promise((resolve) => {
       const connection = new SMTPConnection({
         host: mxHost,
-        port: parseInt(process.env.AWS_SMTP_PORT || "25"),
-        requireTLS: true,
+        port: 25,
+        secure: false,
         tls: { rejectUnauthorized: false },
         socketTimeout: timeout - 500,
       });
@@ -371,50 +367,54 @@ async function validateSMTP(email) {
 
   if (shouldSkipDomain(domain)) {
     console.log(`🚫 Skipping ${email} due to bounceRate`);
-    return {
-      email,
-      smtp: null,
-      catchAll: false,
-      isDisposable: disposableDomains.includes(domain),
-      isFree: freeEmailDomains.includes(domain),
-      isRoleBased: roleBasedUsernames.includes(username),
-      domain,
-      category: "unknown",
-      status: "❔ Skipped (High Bounce)",
-      score: 0,
-    };
+    return buildResult(email, domain, username, null, false, "❔ Skipped (High Bounce)", "unknown");
   }
 
-  let isValid = null;
-  let isCatchAll = false;
-  let mxHost = null;
-
+  let mxHost;
   try {
     const mxRecords = await dns.resolveMx(domain);
     if (!mxRecords.length) throw new Error("No MX records found");
     mxRecords.sort((a, b) => a.priority - b.priority);
     mxHost = mxRecords[0].exchange;
-
-    // 1. Check actual email first
-    isValid = await smtpCheck(email, mxHost, 5000);
-
-    // 2. Early return if clearly invalid
-    if (isValid === false) {
-      return buildResult(email, domain, username, false, false);
-    }
-
-    // 3. Catch-all check only if not invalid
-    const isCatchAll = await smtpCheck(`randomcheck${Date.now()}@${domain}`, mxHost, 7000) === true;
-
-    return buildResult(email, domain, username, isValid, isCatchAll);
-
   } catch (err) {
-    console.warn(`DNS or SMTP failed for ${email}:`, err.message);
-    return buildResult(email, domain, username, null, false);
+    console.warn(`⚠️ DNS lookup failed for ${domain}:`, err.message);
+    return buildResult(email, domain, username, null, false, "❔ Unknown (DNS Failed)", "unknown");
   }
+
+  // 🔄 Parallel real + fake check
+  let validResult = null;
+  let catchAllResult = null;
+
+  try {
+    const fakeEmail = `randomcheck${Date.now()}@${domain}`;
+    const [real, fake] = await Promise.all([
+      smtpCheck(email, mxHost, 5000),
+      smtpCheck(fakeEmail, mxHost, 7000),
+    ]);
+    validResult = real;
+    catchAllResult = fake;
+  } catch (e) {
+    console.warn(`SMTP exception for ${email}:`, e.message);
+  }
+
+  // 🚀 Early invalid response
+  if (validResult === false) {
+    return buildResult(email, domain, username, false, false, "❌ Invalid", "invalid");
+  }
+
+  // Return based on results
+  if (validResult === true && catchAllResult === false) {
+    return buildResult(email, domain, username, true, false, "✅ Valid", "valid");
+  } else if (validResult === true && catchAllResult === true) {
+    return buildResult(email, domain, username, true, true, "⚠️ Risky (Catch-All)", "risky");
+  } else if (validResult === null) {
+    return buildResult(email, domain, username, null, !!catchAllResult, "❔ Unknown (Timeout)", "unknown");
+  }
+
+  return buildResult(email, domain, username, false, !!catchAllResult, "❌ Invalid", "invalid");
 }
 
-function buildResult(email, domain, username, isValid, isCatchAll) {
+function buildResult(email, domain, username, isValid, isCatchAll, status, category) {
   const isDisposable = disposableDomains.includes(domain);
   const isFree = freeEmailDomains.includes(domain);
   const isRoleBased = roleBasedUsernames.includes(username);
@@ -426,20 +426,6 @@ function buildResult(email, domain, username, isValid, isCatchAll) {
   if (isFree) score -= 10;
   if (isRoleBased) score -= 10;
   if (score < 0) score = 0;
-
-  let category = "unknown";
-  let status = "❔ Unknown (Timeout)";
-
-  if (isValid === true && !isCatchAll) {
-    category = "valid";
-    status = "✅ Valid";
-  } else if (isValid === true && isCatchAll) {
-    category = "risky";
-    status = "⚠️ Risky (Catch-All)";
-  } else if (isValid === false) {
-    category = "invalid";
-    status = "❌ Invalid";
-  }
 
   return {
     email,
@@ -456,5 +442,6 @@ function buildResult(email, domain, username, isValid, isCatchAll) {
 }
 
 module.exports = { validateSMTP };
+
 
 

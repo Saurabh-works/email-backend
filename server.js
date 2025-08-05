@@ -335,216 +335,8 @@ app.get("/", (req, res) => {
   res.send("Backend is running!");
 });
 
-// app.post("/send-email", async (req, res) => {
-//   console.log("🛰️ Request Origin:", req.headers.origin);
-//   try {
-//     const { email, sessionId } =
-//       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
-//     if (sessionId) {
-//       sessionEmailMap.set(email, sessionId);
-//     }
-
-//     if (!email) return res.status(400).json({ error: "Email is required" });
-
-//     const domain = extractDomain(email);
-
-//     // 🧠 Step 1: Domain-level bounce analysis
-//     const domainStats = await DomainReputation.findOne({ domain });
-//     if (domainStats && domainStats.sent >= 5) {
-//       const bounceRate = domainStats.invalid / domainStats.sent;
-//       if (bounceRate >= 0.6) {
-//         console.log(
-//           `🚫 Skipping email from bad domain (${domain}), bounceRate: ${bounceRate.toFixed(
-//             2
-//           )}`
-//         );
-//         sendStatusToFrontend(email, "⚠️ Risky (High Bounce Domain)", null, {
-//           domain,
-//           provider: await detectProviderByMX(domain),
-//           isDisposable: disposableDomains.includes(domain),
-//           isFree: freeEmailProviders.includes(domain),
-//           isRoleBased: roleBasedEmails.includes(
-//             email.split("@")[0].toLowerCase()
-//           ),
-//         });
-//         return res
-//           .status(200)
-//           .json({ skipped: true, reason: "High bounce domain" });
-//       }
-//     }
-
-//     // 🧠 Step 2: Cache lookup
-//     const cached = await EmailLog.findOne({ email }).sort({ createdAt: -1 });
-
-//     if (cached) {
-//       const ageMs = Date.now() - new Date(cached.createdAt).getTime();
-//       const isFresh = ageMs < 10 * 24 * 60 * 60 * 1000; // 10 days
-
-//       const isValidType =
-//         cached.status.includes("✅") ||
-//         cached.status.includes("⚠️") ||
-//         cached.status.includes("Unknown");
-
-//       // ✅ If Valid, Risky, Unknown → check freshness
-//       // ✅ If Invalid → reuse permanently
-//       if ((isValidType && isFresh) || cached.status.includes("❌")) {
-//         console.log("📦 Using cached validation result for", email);
-//         sendStatusToFrontend(
-//           email,
-//           cached.status,
-//           cached.timestamp,
-//           {
-//             domain: cached.domain,
-//             provider: cached.domainProvider,
-//             isDisposable: cached.isDisposable,
-//             isFree: cached.isFree,
-//             isRoleBased: cached.isRoleBased,
-//           },
-//           sessionId
-//         );
-//         return res.json({ success: true, cached: true });
-//       }
-//     }
-
-//     // 🧠 Step 3: SMTP validation
-//     const smtpResult = await validateSMTP(email);
-
-//     // ❌ 3.a: If invalid → directly block
-//     if (smtpResult.category === "invalid") {
-//       console.log("⛔ Not sending (invalid):", smtpResult.status);
-//       // sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
-//       sendStatusToFrontend(
-//         email,
-//         smtpResult.status,
-//         null,
-//         smtpResult,
-//         sessionId
-//       );
-//       return res.status(200).json({ skipped: true, reason: "SMTP invalid" });
-//     }
-
-//     // // ⚠️ 3.b: If risky
-//     // if (smtpResult.category === "risky") {
-//     //   const previouslySent = await EmailLog.findOne({ email });
-
-//     //   if (previouslySent) {
-//     //     console.log(
-//     //       "⛔ Not sending (risky, already attempted):",
-//     //       smtpResult.status
-//     //     );
-//     //     // sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
-//     //     sendStatusToFrontend(email, smtpResult.status, null, smtpResult, sessionId);
-//     //     return res
-//     //       .status(200)
-//     //       .json({ skipped: true, reason: "SMTP risky (already tried)" });
-//     //   }
-
-//     //   console.log(
-//     //     "⚠️ First-time risky (catch-all) — sending allowed. Waiting for SES result."
-//     //   );
-//     //   // 🚫 DO NOT send WebSocket update yet — wait for webhook
-//     // }
-
-//     // ⚠️ 3.b: If risky
-//     if (smtpResult.category === "risky") {
-//       const previouslySent = await EmailLog.findOne({ email });
-
-//       if (previouslySent) {
-//         console.log(
-//           "⛔ Not sending (risky, already attempted):",
-//           smtpResult.status
-//         );
-//         sendStatusToFrontend(
-//           email,
-//           smtpResult.status,
-//           null,
-//           smtpResult,
-//           sessionId
-//         );
-//         return res
-//           .status(200)
-//           .json({ skipped: true, reason: "SMTP risky (already tried)" });
-//       }
-
-//       console.log("⚠️ First-time risky — emitting now, SES will confirm later");
-
-//       // ✅ Emit risky result to UI immediately (don't wait for SES webhook)
-//       sendStatusToFrontend(
-//         email,
-//         smtpResult.status,
-//         Date.now(),
-//         smtpResult,
-//         sessionId
-//       );
-//     }
-
-//     // ..........................................................................this is updated by me
-//     // ✅ 3.c: If valid (not risky or invalid) → emit immediately!
-//     if (smtpResult.category === "valid") {
-//       console.log("✅ Valid email — emitting result immediately");
-//       sendStatusToFrontend(
-//         email,
-//         smtpResult.status,
-//         Date.now(),
-//         smtpResult,
-//         sessionId
-//       );
-//     }
-
-//     // ..............................................................................................till here
-
-//     // 🧠 Step 4: Send email via SES
-//     const region = getBestRegion();
-//     console.log("📤 Using SES region:", region);
-
-//     const dynamicSES = new SESClient({
-//       region,
-//       credentials: {
-//         accessKeyId: process.env.AWS_SMTP_USER,
-//         secretAccessKey: process.env.AWS_SMTP_PASS,
-//       },
-//     });
-
-//     const params = {
-//       Source: process.env.VERIFIED_EMAIL,
-//       Destination: { ToAddresses: [email] },
-//       Message: {
-//         Subject: { Data: "Hope this finds you well 😊" },
-//         Body: {
-//           Text: {
-//             Data: `Hey there!\n\nJust wanted to say a quick hello and check if everything’s going smoothly.\nFeel free to get in touch anytime — we’re always here to help.\n\nWarm wishes,\nJenny\nTeam TrueSendr`,
-//           },
-//         },
-//       },
-//     };
-
-//     // await dynamicSES.send(new SendEmailCommand(params));
-//     // await incrementStat(region, "sent");
-
-//     // // ⚡️ Don't send frontend result now → frontend will wait for webhook
-//     // res.json({ success: true });
-
-//     await dynamicSES.send(new SendEmailCommand(params));
-//     await incrementStat(region, "sent");
-
-//     // ✅ Emit result immediately (don't wait for webhook)
-//     sendStatusToFrontend(
-//       email,
-//       smtpResult.status,
-//       Date.now(),
-//       smtpResult,
-//       sessionId
-//     );
-
-//     res.json({ success: true });
-//   } catch (err) {
-//     console.error("❌ Error in /send-email:", err.message);
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
 app.post("/send-email", async (req, res) => {
+  console.log("🛰️ Request Origin:", req.headers.origin);
   try {
     const { email, sessionId } =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
@@ -621,9 +413,38 @@ app.post("/send-email", async (req, res) => {
     // ❌ 3.a: If invalid → directly block
     if (smtpResult.category === "invalid") {
       console.log("⛔ Not sending (invalid):", smtpResult.status);
-      sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+      // sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+      sendStatusToFrontend(
+        email,
+        smtpResult.status,
+        null,
+        smtpResult,
+        sessionId
+      );
       return res.status(200).json({ skipped: true, reason: "SMTP invalid" });
     }
+
+    // // ⚠️ 3.b: If risky
+    // if (smtpResult.category === "risky") {
+    //   const previouslySent = await EmailLog.findOne({ email });
+
+    //   if (previouslySent) {
+    //     console.log(
+    //       "⛔ Not sending (risky, already attempted):",
+    //       smtpResult.status
+    //     );
+    //     // sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+    //     sendStatusToFrontend(email, smtpResult.status, null, smtpResult, sessionId);
+    //     return res
+    //       .status(200)
+    //       .json({ skipped: true, reason: "SMTP risky (already tried)" });
+    //   }
+
+    //   console.log(
+    //     "⚠️ First-time risky (catch-all) — sending allowed. Waiting for SES result."
+    //   );
+    //   // 🚫 DO NOT send WebSocket update yet — wait for webhook
+    // }
 
     // ⚠️ 3.b: If risky
     if (smtpResult.category === "risky") {
@@ -634,17 +455,44 @@ app.post("/send-email", async (req, res) => {
           "⛔ Not sending (risky, already attempted):",
           smtpResult.status
         );
-        sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+        sendStatusToFrontend(
+          email,
+          smtpResult.status,
+          null,
+          smtpResult,
+          sessionId
+        );
         return res
           .status(200)
           .json({ skipped: true, reason: "SMTP risky (already tried)" });
       }
 
-      console.log(
-        "⚠️ First-time risky (catch-all) — sending allowed. Waiting for SES result."
+      console.log("⚠️ First-time risky — emitting now, SES will confirm later");
+
+      // ✅ Emit risky result to UI immediately (don't wait for SES webhook)
+      sendStatusToFrontend(
+        email,
+        smtpResult.status,
+        Date.now(),
+        smtpResult,
+        sessionId
       );
-      // 🚫 DO NOT send WebSocket update yet — wait for webhook
     }
+
+    // ..........................................................................this is updated by me
+    // ✅ 3.c: If valid (not risky or invalid) → emit immediately!
+    if (smtpResult.category === "valid") {
+      console.log("✅ Valid email — emitting result immediately");
+      sendStatusToFrontend(
+        email,
+        smtpResult.status,
+        Date.now(),
+        smtpResult,
+        sessionId
+      );
+    }
+
+    // ..............................................................................................till here
 
     // 🧠 Step 4: Send email via SES
     const region = getBestRegion();
@@ -671,16 +519,168 @@ app.post("/send-email", async (req, res) => {
       },
     };
 
+    // await dynamicSES.send(new SendEmailCommand(params));
+    // await incrementStat(region, "sent");
+
+    // // ⚡️ Don't send frontend result now → frontend will wait for webhook
+    // res.json({ success: true });
+
     await dynamicSES.send(new SendEmailCommand(params));
     await incrementStat(region, "sent");
 
-    // ⚡️ Don't send frontend result now → frontend will wait for webhook
+    // ✅ Emit result immediately (don't wait for webhook)
+    sendStatusToFrontend(
+      email,
+      smtpResult.status,
+      Date.now(),
+      smtpResult,
+      sessionId
+    );
+
     res.json({ success: true });
   } catch (err) {
     console.error("❌ Error in /send-email:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
+
+// app.post("/send-email", async (req, res) => {
+//   try {
+//     const { email, sessionId } =
+//       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
+//     if (sessionId) {
+//       sessionEmailMap.set(email, sessionId);
+//     }
+
+//     if (!email) return res.status(400).json({ error: "Email is required" });
+
+//     const domain = extractDomain(email);
+
+//     // 🧠 Step 1: Domain-level bounce analysis
+//     const domainStats = await DomainReputation.findOne({ domain });
+//     if (domainStats && domainStats.sent >= 5) {
+//       const bounceRate = domainStats.invalid / domainStats.sent;
+//       if (bounceRate >= 0.6) {
+//         console.log(
+//           `🚫 Skipping email from bad domain (${domain}), bounceRate: ${bounceRate.toFixed(
+//             2
+//           )}`
+//         );
+//         sendStatusToFrontend(email, "⚠️ Risky (High Bounce Domain)", null, {
+//           domain,
+//           provider: await detectProviderByMX(domain),
+//           isDisposable: disposableDomains.includes(domain),
+//           isFree: freeEmailProviders.includes(domain),
+//           isRoleBased: roleBasedEmails.includes(
+//             email.split("@")[0].toLowerCase()
+//           ),
+//         });
+//         return res
+//           .status(200)
+//           .json({ skipped: true, reason: "High bounce domain" });
+//       }
+//     }
+
+//     // 🧠 Step 2: Cache lookup
+//     const cached = await EmailLog.findOne({ email }).sort({ createdAt: -1 });
+
+//     if (cached) {
+//       const ageMs = Date.now() - new Date(cached.createdAt).getTime();
+//       const isFresh = ageMs < 10 * 24 * 60 * 60 * 1000; // 10 days
+
+//       const isValidType =
+//         cached.status.includes("✅") ||
+//         cached.status.includes("⚠️") ||
+//         cached.status.includes("Unknown");
+
+//       // ✅ If Valid, Risky, Unknown → check freshness
+//       // ✅ If Invalid → reuse permanently
+//       if ((isValidType && isFresh) || cached.status.includes("❌")) {
+//         console.log("📦 Using cached validation result for", email);
+//         sendStatusToFrontend(
+//           email,
+//           cached.status,
+//           cached.timestamp,
+//           {
+//             domain: cached.domain,
+//             provider: cached.domainProvider,
+//             isDisposable: cached.isDisposable,
+//             isFree: cached.isFree,
+//             isRoleBased: cached.isRoleBased,
+//           },
+//           sessionId
+//         );
+//         return res.json({ success: true, cached: true });
+//       }
+//     }
+
+//     // 🧠 Step 3: SMTP validation
+//     const smtpResult = await validateSMTP(email);
+
+//     // ❌ 3.a: If invalid → directly block
+//     if (smtpResult.category === "invalid") {
+//       console.log("⛔ Not sending (invalid):", smtpResult.status);
+//       sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+//       return res.status(200).json({ skipped: true, reason: "SMTP invalid" });
+//     }
+
+//     // ⚠️ 3.b: If risky
+//     if (smtpResult.category === "risky") {
+//       const previouslySent = await EmailLog.findOne({ email });
+
+//       if (previouslySent) {
+//         console.log(
+//           "⛔ Not sending (risky, already attempted):",
+//           smtpResult.status
+//         );
+//         sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+//         return res
+//           .status(200)
+//           .json({ skipped: true, reason: "SMTP risky (already tried)" });
+//       }
+
+//       console.log(
+//         "⚠️ First-time risky (catch-all) — sending allowed. Waiting for SES result."
+//       );
+//       // 🚫 DO NOT send WebSocket update yet — wait for webhook
+//     }
+
+//     // 🧠 Step 4: Send email via SES
+//     const region = getBestRegion();
+//     console.log("📤 Using SES region:", region);
+
+//     const dynamicSES = new SESClient({
+//       region,
+//       credentials: {
+//         accessKeyId: process.env.AWS_SMTP_USER,
+//         secretAccessKey: process.env.AWS_SMTP_PASS,
+//       },
+//     });
+
+//     const params = {
+//       Source: process.env.VERIFIED_EMAIL,
+//       Destination: { ToAddresses: [email] },
+//       Message: {
+//         Subject: { Data: "Hope this finds you well 😊" },
+//         Body: {
+//           Text: {
+//             Data: `Hey there!\n\nJust wanted to say a quick hello and check if everything’s going smoothly.\nFeel free to get in touch anytime — we’re always here to help.\n\nWarm wishes,\nJenny\nTeam TrueSendr`,
+//           },
+//         },
+//       },
+//     };
+
+//     await dynamicSES.send(new SendEmailCommand(params));
+//     await incrementStat(region, "sent");
+
+//     // ⚡️ Don't send frontend result now → frontend will wait for webhook
+//     res.json({ success: true });
+//   } catch (err) {
+//     console.error("❌ Error in /send-email:", err.message);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 app.post("/ses-webhook", async (req, res) => {
   try {

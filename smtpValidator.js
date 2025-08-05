@@ -390,10 +390,10 @@ async function validateSMTP(email) {
     return buildResult(email, domain, username, true, false, "✅ Valid", "valid");
   } else if (validResult === true && catchAllResult === true) {
     return buildResult(email, domain, username, true, true, "⚠️ Risky (Catch-All)", "risky");
-  } else if (validResult === null) {
-    return buildResult(email, domain, username, null, !!catchAllResult, "❔ Unknown (Timeout)", "unknown");
-    // return null;
-  }
+  } // else if (validResult === null) {
+  //   return buildResult(email, domain, username, null, !!catchAllResult, "❔ Unknown (Timeout)", "unknown");
+  //   // return null;
+  // }
 
   return buildResult(email, domain, username, false, !!catchAllResult, "❌ Invalid", "invalid");
 }

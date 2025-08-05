@@ -496,8 +496,8 @@ if (validResult === true && catchAllResult === null) {
 }
 
 // If valid result is null
-// return buildResult(email, domain, username, null, !!catchAllResult, "❔ Unknown (Timeout)", "unknown");
-return null;
+return buildResult(email, domain, username, null, !!catchAllResult, "❔ Unknown (Timeout)", "unknown");
+// return null;
  
 }
 

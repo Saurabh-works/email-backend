@@ -412,7 +412,8 @@ app.post("/send-email", async (req, res) => {
     // ❌ 3.a: If invalid → directly block
     if (smtpResult.category === "invalid") {
       console.log("⛔ Not sending (invalid):", smtpResult.status);
-      sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+      // sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+      sendStatusToFrontend(email, smtpResult.status, null, smtpResult, sessionId);
       return res.status(200).json({ skipped: true, reason: "SMTP invalid" });
     }
 
@@ -425,7 +426,8 @@ app.post("/send-email", async (req, res) => {
           "⛔ Not sending (risky, already attempted):",
           smtpResult.status
         );
-        sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+        // sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+        sendStatusToFrontend(email, smtpResult.status, null, smtpResult, sessionId);
         return res
           .status(200)
           .json({ skipped: true, reason: "SMTP risky (already tried)" });

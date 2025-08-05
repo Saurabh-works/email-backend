@@ -1,4 +1,4 @@
-require('dotenv').config();
+require("dotenv").config();
 const credentials = {};
 const userPerms = {}; // username => ['single'] or ['single', 'bulk']
 
@@ -12,21 +12,15 @@ function loadUsers(envString, permissions) {
       userPerms[username] = permissions;
     }
   }
-} 
+}
 
 // Load from .env
 loadUsers(process.env.FULL_USERS, ["single", "bulk"]);
 loadUsers(process.env.LIMITED_USERS, ["single"]);
 
-
-
 //.............................................................................................................
 
-
 // Load SSL certificate and key
-
-
-
 
 const express = require("express");
 const bodyParser = require("body-parser");
@@ -50,7 +44,7 @@ const sessionEmailMap = new Map(); // email => sessionId
 const mongoose = require("mongoose");
 const EmailLog = require("./models/EmailLog");
 const contactApi = require("./contactApi");
-const mailpreviewApi = require('./mailpreviewApi');
+const mailpreviewApi = require("./mailpreviewApi");
 
 // const sslOptions = {
 //   key: fs.readFileSync("./localhost-key.pem"),
@@ -63,15 +57,13 @@ const mailpreviewApi = require('./mailpreviewApi');
 // };
 
 const app = express();
-app.set('trust proxy', true); // ✅ Add this line it should forward the original visitor IP
+app.set("trust proxy", true); // ✅ Add this line it should forward the original visitor IP
 
 const PORT = 5000;
 const server = http.createServer(app);
 // const server = https.createServer(sslOptions, app); // changes by saurabh
 const wss = new WebSocket.Server({ server });
 // const ws = new WebSocket.Server({ server });
-
-
 
 const regions = [
   process.env.AWS_REGION,
@@ -82,29 +74,31 @@ const regions = [
 
 let regionStats = [];
 
-mongoose.connect(process.env.MONGO_URI).then(async () => {
-  console.log("✅ Connected to MongoDB");
-  const existingStats = await RegionStat.find({ region: { $in: regions } });
-  regionStats = regions.map(region => {
-    const match = existingStats.find(r => r.region === region);
-    return match || new RegionStat({ region, sent: 0, bounces: 0 });
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(async () => {
+    console.log("✅ Connected to MongoDB");
+    const existingStats = await RegionStat.find({ region: { $in: regions } });
+    regionStats = regions.map((region) => {
+      const match = existingStats.find((r) => r.region === region);
+      return match || new RegionStat({ region, sent: 0, bounces: 0 });
+    });
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err);
   });
-}).catch((err) => {
-  console.error("❌ MongoDB connection error:", err);
-});
 
 setInterval(() => {
   console.log("🧭 Region Stats:", regionStats);
 }, 300000); // log every 5 minutes
 
 app.use((req, res, next) => {
-  if (req.headers['x-amz-sns-message-type']) {
-    bodyParser.text({ type: '*/*' })(req, res, next);
+  if (req.headers["x-amz-sns-message-type"]) {
+    bodyParser.text({ type: "*/*" })(req, res, next);
   } else {
     bodyParser.json()(req, res, next);
   }
 });
-
 
 // const allowedOrigins = ["https://localhost:3000", "https://truesendr.com"];
 
@@ -116,15 +110,14 @@ const allowedOrigins = [
   "https://truesendr-ui.vercel.app",
   "https://77fd70c33625.ngrok-free.app",
   "https://13.218.96.234:5000",
-  "https://truenotsendr.com"
+  "https://truenotsendr.com",
 ];
-
 
 // app.use(cors({
 //   origin: function (origin, callback) {
 //     if (
-//       !origin || 
-//       allowedOrigins.includes(origin) || 
+//       !origin ||
+//       allowedOrigins.includes(origin) ||
 //       allowRegex.some(regex => regex.test(origin))
 //     ) {
 //       callback(null, true);
@@ -158,7 +151,7 @@ const corsOptions = {
   allowedHeaders: [
     "Content-Type",
     "Authorization",
-    "ngrok-skip-browser-warning"
+    "ngrok-skip-browser-warning",
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 };
@@ -166,17 +159,31 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // Allow preflight requests
 
-
-
-
 const upload = multer({ dest: "uploads/" });
 let clients = new Set();
 let validationResults = {};
 
 const sessionClients = new Map(); // sessionId => WebSocket
-const disposableDomains = ["mailinator.com", "tempmail.com", "10minutemail.com"];
-const freeEmailProviders = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com"];
-const roleBasedEmails = ["admin", "support", "info", "contact", "help", "sales", "development"];
+const disposableDomains = [
+  "mailinator.com",
+  "tempmail.com",
+  "10minutemail.com",
+];
+const freeEmailProviders = [
+  "gmail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+];
+const roleBasedEmails = [
+  "admin",
+  "support",
+  "info",
+  "contact",
+  "help",
+  "sales",
+  "development",
+];
 
 wss.on("connection", (ws) => {
   ws.on("message", (msg) => {
@@ -200,7 +207,6 @@ wss.on("connection", (ws) => {
   });
 });
 
-
 function extractDomain(email) {
   if (!email || !email.includes("@")) return "N/A";
   return email.split("@")[1].toLowerCase();
@@ -209,9 +215,13 @@ function extractDomain(email) {
 async function detectProviderByMX(domain) {
   try {
     const records = await dns.resolveMx(domain);
-    const mxHosts = records.map(r => r.exchange.toLowerCase()).join(", ");
+    const mxHosts = records.map((r) => r.exchange.toLowerCase()).join(", ");
     if (mxHosts.includes("google.com")) return "Gmail / Google Workspace";
-    if (mxHosts.includes("outlook.com") || mxHosts.includes("protection.outlook.com")) return "Outlook / Microsoft 365";
+    if (
+      mxHosts.includes("outlook.com") ||
+      mxHosts.includes("protection.outlook.com")
+    )
+      return "Outlook / Microsoft 365";
     if (mxHosts.includes("zoho.com")) return "Zoho Mail";
     if (mxHosts.includes("yahoodns.net")) return "Yahoo Mail";
     if (mxHosts.includes("protonmail")) return "ProtonMail";
@@ -234,23 +244,30 @@ function calculateEmailScore({ status, isDisposable, isFree, isRoleBased }) {
   return Math.max(score, 0);
 }
 
-
 function sendProgressToFrontend(current, total, sessionId = null) {
   const msg = JSON.stringify({ type: "progress", current, total });
   if (sessionId && sessionClients.has(sessionId)) {
     const ws = sessionClients.get(sessionId);
     if (ws.readyState === WebSocket.OPEN) ws.send(msg);
   } else {
-    clients.forEach(client => client.readyState === WebSocket.OPEN && client.send(msg));
+    clients.forEach(
+      (client) => client.readyState === WebSocket.OPEN && client.send(msg)
+    );
   }
 }
 
-
-function sendStatusToFrontend(email, status, timestamp, details, sessionId = null) {
+function sendStatusToFrontend(
+  email,
+  status,
+  timestamp,
+  details,
+  sessionId = null
+) {
   const score = calculateEmailScore({ status, ...details });
-  const expiresAt = status.includes("Valid") || status.includes("Unknown")
-    ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
-    : null;
+  const expiresAt =
+    status.includes("Valid") || status.includes("Unknown")
+      ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+      : null;
 
   const msgObj = {
     email,
@@ -262,7 +279,7 @@ function sendStatusToFrontend(email, status, timestamp, details, sessionId = nul
     isFree: !!details.isFree,
     isRoleBased: !!details.isRoleBased,
     score,
-    expiresAt
+    expiresAt,
   };
 
   validationResults[email] = msgObj;
@@ -272,13 +289,13 @@ function sendStatusToFrontend(email, status, timestamp, details, sessionId = nul
     const ws = sessionClients.get(sessionId);
     if (ws.readyState === WebSocket.OPEN) ws.send(message);
   } else {
-    clients.forEach(client => client.readyState === WebSocket.OPEN && client.send(message));
+    clients.forEach(
+      (client) => client.readyState === WebSocket.OPEN && client.send(message)
+    );
   }
 
   new EmailLog(msgObj).save();
 }
-
-
 
 function getBounceRate(stat) {
   return stat.sent > 0 ? (stat.bounces / stat.sent) * 100 : 0;
@@ -301,26 +318,30 @@ function getBestRegion() {
   return process.env.AWS_REGION;
 }
 
-
 async function incrementStat(region, type) {
-  const target = regionStats.find(r => r.region === region);
+  const target = regionStats.find((r) => r.region === region);
   if (!target) return;
   if (type === "sent") target.sent++;
   if (type === "bounce") target.bounces++;
-  await RegionStat.updateOne({ region }, { $inc: { [type]: 1 } }, { upsert: true });
+  await RegionStat.updateOne(
+    { region },
+    { $inc: { [type]: 1 } },
+    { upsert: true }
+  );
 }
 
 app.get("/", (req, res) => {
-  res.send('Backend is running!');
+  res.send("Backend is running!");
 });
 
 app.post("/send-email", async (req, res) => {
   console.log("🛰️ Request Origin:", req.headers.origin);
   try {
-    const { email, sessionId } = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const { email, sessionId } =
+      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
     if (sessionId) {
-    sessionEmailMap.set(email, sessionId);
+      sessionEmailMap.set(email, sessionId);
     }
 
     if (!email) return res.status(400).json({ error: "Email is required" });
@@ -332,47 +353,58 @@ app.post("/send-email", async (req, res) => {
     if (domainStats && domainStats.sent >= 5) {
       const bounceRate = domainStats.invalid / domainStats.sent;
       if (bounceRate >= 0.6) {
-        console.log(`🚫 Skipping email from bad domain (${domain}), bounceRate: ${bounceRate.toFixed(2)}`);
+        console.log(
+          `🚫 Skipping email from bad domain (${domain}), bounceRate: ${bounceRate.toFixed(
+            2
+          )}`
+        );
         sendStatusToFrontend(email, "⚠️ Risky (High Bounce Domain)", null, {
           domain,
           provider: await detectProviderByMX(domain),
           isDisposable: disposableDomains.includes(domain),
           isFree: freeEmailProviders.includes(domain),
-          isRoleBased: roleBasedEmails.includes(email.split("@")[0].toLowerCase())
+          isRoleBased: roleBasedEmails.includes(
+            email.split("@")[0].toLowerCase()
+          ),
         });
-        return res.status(200).json({ skipped: true, reason: "High bounce domain" });
+        return res
+          .status(200)
+          .json({ skipped: true, reason: "High bounce domain" });
       }
     }
 
     // 🧠 Step 2: Cache lookup
     const cached = await EmailLog.findOne({ email }).sort({ createdAt: -1 });
 
-if (cached) {
-  const ageMs = Date.now() - new Date(cached.createdAt).getTime();
-  const isFresh = ageMs < 10 * 24 * 60 * 60 * 1000; // 10 days
+    if (cached) {
+      const ageMs = Date.now() - new Date(cached.createdAt).getTime();
+      const isFresh = ageMs < 10 * 24 * 60 * 60 * 1000; // 10 days
 
-  const isValidType = (
-    cached.status.includes("✅") ||
-    cached.status.includes("⚠️") ||
-    cached.status.includes("Unknown")
-  );
+      const isValidType =
+        cached.status.includes("✅") ||
+        cached.status.includes("⚠️") ||
+        cached.status.includes("Unknown");
 
-  // ✅ If Valid, Risky, Unknown → check freshness
-  // ✅ If Invalid → reuse permanently
-  if ((isValidType && isFresh) || cached.status.includes("❌")) {
-    console.log("📦 Using cached validation result for", email);
-    sendStatusToFrontend(email, cached.status, cached.timestamp, {
-      domain: cached.domain,
-      provider: cached.domainProvider,
-      isDisposable: cached.isDisposable,
-      isFree: cached.isFree,
-      isRoleBased: cached.isRoleBased
-    }, sessionId);
-    return res.json({ success: true, cached: true });
-  }
-}
-
-
+      // ✅ If Valid, Risky, Unknown → check freshness
+      // ✅ If Invalid → reuse permanently
+      if ((isValidType && isFresh) || cached.status.includes("❌")) {
+        console.log("📦 Using cached validation result for", email);
+        sendStatusToFrontend(
+          email,
+          cached.status,
+          cached.timestamp,
+          {
+            domain: cached.domain,
+            provider: cached.domainProvider,
+            isDisposable: cached.isDisposable,
+            isFree: cached.isFree,
+            isRoleBased: cached.isRoleBased,
+          },
+          sessionId
+        );
+        return res.json({ success: true, cached: true });
+      }
+    }
 
     // 🧠 Step 3: SMTP validation
     const smtpResult = await validateSMTP(email);
@@ -389,14 +421,36 @@ if (cached) {
       const previouslySent = await EmailLog.findOne({ email });
 
       if (previouslySent) {
-        console.log("⛔ Not sending (risky, already attempted):", smtpResult.status);
+        console.log(
+          "⛔ Not sending (risky, already attempted):",
+          smtpResult.status
+        );
         sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
-        return res.status(200).json({ skipped: true, reason: "SMTP risky (already tried)" });
+        return res
+          .status(200)
+          .json({ skipped: true, reason: "SMTP risky (already tried)" });
       }
 
-      console.log("⚠️ First-time risky (catch-all) — sending allowed. Waiting for SES result.");
+      console.log(
+        "⚠️ First-time risky (catch-all) — sending allowed. Waiting for SES result."
+      );
       // 🚫 DO NOT send WebSocket update yet — wait for webhook
     }
+
+    // ..........................................................................this is updated by me
+    // ✅ 3.c: If valid (not risky or invalid) → emit immediately!
+    if (smtpResult.category === "valid") {
+      console.log("✅ Valid email — emitting result immediately");
+      sendStatusToFrontend(
+        email,
+        smtpResult.status,
+        Date.now(),
+        smtpResult,
+        sessionId
+      );
+    }
+
+    // ..............................................................................................till here
 
     // 🧠 Step 4: Send email via SES
     const region = getBestRegion();
@@ -406,8 +460,8 @@ if (cached) {
       region,
       credentials: {
         accessKeyId: process.env.AWS_SMTP_USER,
-        secretAccessKey: process.env.AWS_SMTP_PASS
-      }
+        secretAccessKey: process.env.AWS_SMTP_PASS,
+      },
     });
 
     const params = {
@@ -417,10 +471,10 @@ if (cached) {
         Subject: { Data: "Hope this finds you well 😊" },
         Body: {
           Text: {
-            Data: `Hey there!\n\nJust wanted to say a quick hello and check if everything’s going smoothly.\nFeel free to get in touch anytime — we’re always here to help.\n\nWarm wishes,\nJenny\nTeam TrueSendr`
-          }
-        }
-      }
+            Data: `Hey there!\n\nJust wanted to say a quick hello and check if everything’s going smoothly.\nFeel free to get in touch anytime — we’re always here to help.\n\nWarm wishes,\nJenny\nTeam TrueSendr`,
+          },
+        },
+      },
     };
 
     await dynamicSES.send(new SendEmailCommand(params));
@@ -434,12 +488,11 @@ if (cached) {
   }
 });
 
-
-
 app.post("/ses-webhook", async (req, res) => {
   try {
     console.log("📥 SNS Webhook Hit");
-    const snsMessage = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const snsMessage =
+      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
     if (snsMessage.Type === "SubscriptionConfirmation") {
       console.log("🔗 Confirming SNS subscription...");
@@ -449,12 +502,16 @@ app.post("/ses-webhook", async (req, res) => {
 
     if (snsMessage.Type === "Notification") {
       console.log("🔔 Notification received");
-      const messageBody = typeof snsMessage.Message === "string" ? JSON.parse(snsMessage.Message) : snsMessage.Message;
+      const messageBody =
+        typeof snsMessage.Message === "string"
+          ? JSON.parse(snsMessage.Message)
+          : snsMessage.Message;
       const email = messageBody.mail.destination[0];
       const sessionId = sessionEmailMap.get(email);
       sessionEmailMap.delete(email); // clean up
 
-      const timestamp = messageBody.bounce?.timestamp || messageBody.mail.timestamp;
+      const timestamp =
+        messageBody.bounce?.timestamp || messageBody.mail.timestamp;
       const notificationType = messageBody.notificationType;
       const domain = extractDomain(email);
 
@@ -462,27 +519,31 @@ app.post("/ses-webhook", async (req, res) => {
 
       // 🚫 If cached email was marked as "⚠️ Risky (High Bounce Domain)", ignore notification
       if (cached && cached.status === "⚠️ Risky (High Bounce Domain)") {
-        console.log(`⚠️ Ignored SNS notification for high bounce domain risky email: ${email}`);
+        console.log(
+          `⚠️ Ignored SNS notification for high bounce domain risky email: ${email}`
+        );
         return res.status(200).send("Ignored High Bounce Risky Email");
       }
 
       const provider = await detectProviderByMX(domain);
       const isDisposable = disposableDomains.includes(domain);
       const isFree = freeEmailProviders.includes(domain);
-      const isRoleBased = roleBasedEmails.includes(email.split("@")[0].toLowerCase());
+      const isRoleBased = roleBasedEmails.includes(
+        email.split("@")[0].toLowerCase()
+      );
 
-      const status = notificationType === "Delivery" ? "✅ Valid Email" : "❌ Invalid Email";
+      const status =
+        notificationType === "Delivery" ? "✅ Valid Email" : "❌ Invalid Email";
 
       // Track domain reputation
-      const statUpdate = notificationType === "Bounce"
-        ? { $inc: { sent: 1, invalid: 1 } }
-        : { $inc: { sent: 1 } };
+      const statUpdate =
+        notificationType === "Bounce"
+          ? { $inc: { sent: 1, invalid: 1 } }
+          : { $inc: { sent: 1 } };
 
-      await DomainReputation.updateOne(
-        { domain },
-        statUpdate,
-        { upsert: true }
-      );
+      await DomainReputation.updateOne({ domain }, statUpdate, {
+        upsert: true,
+      });
 
       if (notificationType === "Bounce") {
         const region = getBestRegion();
@@ -490,14 +551,19 @@ app.post("/ses-webhook", async (req, res) => {
       }
 
       // ✅ Only update frontend if NOT a risky high bounce domain
-      sendStatusToFrontend(email, status, timestamp, {
-      domain,
-      provider,
-      isDisposable,
-      isFree,
-      isRoleBased
-    }, sessionId);
-
+      sendStatusToFrontend(
+        email,
+        status,
+        timestamp,
+        {
+          domain,
+          provider,
+          isDisposable,
+          isFree,
+          isRoleBased,
+        },
+        sessionId
+      );
 
       return res.status(200).send("OK");
     }
@@ -507,9 +573,7 @@ app.post("/ses-webhook", async (req, res) => {
     console.error("❌ SNS Webhook Error:", error.message);
     return res.status(400).send("Bad Request");
   }
-
 });
-
 
 // 🧾 Return a clean Excel Template
 app.get("/download-template", (req, res) => {
@@ -518,12 +582,16 @@ app.get("/download-template", (req, res) => {
   xlsx.utils.book_append_sheet(workbook, worksheet, "Template");
 
   const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
-  res.setHeader("Content-Disposition", "attachment; filename=email_template.xlsx");
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader(
+    "Content-Disposition",
+    "attachment; filename=email_template.xlsx"
+  );
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
   res.send(buffer);
 });
-
-
 
 //📥 Bulk Upload Excel
 app.post("/upload-excel", upload.single("file"), async (req, res) => {
@@ -537,7 +605,7 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
     const worksheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(worksheet);
 
-    const emailCol = Object.keys(data[0]).find(col =>
+    const emailCol = Object.keys(data[0]).find((col) =>
       col.toLowerCase().includes("email")
     );
     if (!emailCol) return res.status(400).send("No email column found");
@@ -557,7 +625,10 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
         cached?.status?.includes("⚠️") ||
         cached?.status?.includes("Unknown");
 
-      if (cached && ((isValidType && isFresh) || cached.status.includes("❌"))) {
+      if (
+        cached &&
+        ((isValidType && isFresh) || cached.status.includes("❌"))
+      ) {
         result = cached;
       } else {
         try {
@@ -652,7 +723,6 @@ app.post("/upload-excel", upload.single("file"), async (req, res) => {
   }
 });
 
-
 app.get("/region-stats", async (req, res) => {
   try {
     const stats = await RegionStat.find({ region: { $in: regions } });
@@ -681,7 +751,9 @@ app.post("/login", (req, res) => {
 
   // 2.a) Check credentials map
   if (credentials[username] !== password) {
-    return res.status(401).json({ success: false, message: "Invalid credentials" });
+    return res
+      .status(401)
+      .json({ success: false, message: "Invalid credentials" });
   }
 
   // 2.b) Fetch this user’s permissions (always at least ["single"])
@@ -689,13 +761,11 @@ app.post("/login", (req, res) => {
 
   // 2.c) Return both success + what they’re allowed to do
   return res.json({
-    success:     true,
-    message:     "Login successful",
-    permissions: perms     // e.g. ["single","bulk"] or ["single"]
+    success: true,
+    message: "Login successful",
+    permissions: perms, // e.g. ["single","bulk"] or ["single"]
   });
 });
-
-
 
 function waitForValidation(email, timeout = 12000) {
   return new Promise((resolve) => {
@@ -705,13 +775,15 @@ function waitForValidation(email, timeout = 12000) {
       if (result) return resolve(result);
       if (Date.now() - start > timeout) {
         const domain = extractDomain(email);
-        detectProviderByMX(domain).then(provider => {
+        detectProviderByMX(domain).then((provider) => {
           const details = {
             domain,
             provider,
             isDisposable: disposableDomains.includes(domain),
             isFree: freeEmailProviders.includes(domain),
-            isRoleBased: roleBasedEmails.includes(email.split("@")[0].toLowerCase())
+            isRoleBased: roleBasedEmails.includes(
+              email.split("@")[0].toLowerCase()
+            ),
           };
           const status = "❔ Unknown";
           sendStatusToFrontend(email, status, null, details);
@@ -725,20 +797,16 @@ function waitForValidation(email, timeout = 12000) {
   });
 }
 
-
 // from this saurabh's code start
 
 app.use("/api/contact", contactApi);
 
-
-
 app.use("/api/campaign", campaignApi);
 
-app.use('/api/preview', mailpreviewApi);
+app.use("/api/preview", mailpreviewApi);
 
 // server.js or smtpValidator.js
 module.exports = { validateSMTP, sessionClients };
-
 
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 // server.listen(PORT, () => console.log(`🔒 HTTPS Server running at https://localhost:${PORT}`));  //changes by saurabh

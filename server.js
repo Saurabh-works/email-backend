@@ -413,9 +413,37 @@ app.post("/send-email", async (req, res) => {
     if (smtpResult.category === "invalid") {
       console.log("⛔ Not sending (invalid):", smtpResult.status);
       // sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
-      sendStatusToFrontend(email, smtpResult.status, null, smtpResult, sessionId);
+      sendStatusToFrontend(
+        email,
+        smtpResult.status,
+        null,
+        smtpResult,
+        sessionId
+      );
       return res.status(200).json({ skipped: true, reason: "SMTP invalid" });
     }
+
+    // // ⚠️ 3.b: If risky
+    // if (smtpResult.category === "risky") {
+    //   const previouslySent = await EmailLog.findOne({ email });
+
+    //   if (previouslySent) {
+    //     console.log(
+    //       "⛔ Not sending (risky, already attempted):",
+    //       smtpResult.status
+    //     );
+    //     // sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
+    //     sendStatusToFrontend(email, smtpResult.status, null, smtpResult, sessionId);
+    //     return res
+    //       .status(200)
+    //       .json({ skipped: true, reason: "SMTP risky (already tried)" });
+    //   }
+
+    //   console.log(
+    //     "⚠️ First-time risky (catch-all) — sending allowed. Waiting for SES result."
+    //   );
+    //   // 🚫 DO NOT send WebSocket update yet — wait for webhook
+    // }
 
     // ⚠️ 3.b: If risky
     if (smtpResult.category === "risky") {
@@ -426,17 +454,28 @@ app.post("/send-email", async (req, res) => {
           "⛔ Not sending (risky, already attempted):",
           smtpResult.status
         );
-        // sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
-        sendStatusToFrontend(email, smtpResult.status, null, smtpResult, sessionId);
+        sendStatusToFrontend(
+          email,
+          smtpResult.status,
+          null,
+          smtpResult,
+          sessionId
+        );
         return res
           .status(200)
           .json({ skipped: true, reason: "SMTP risky (already tried)" });
       }
 
-      console.log(
-        "⚠️ First-time risky (catch-all) — sending allowed. Waiting for SES result."
+      console.log("⚠️ First-time risky — emitting now, SES will confirm later");
+
+      // ✅ Emit risky result to UI immediately (don't wait for SES webhook)
+      sendStatusToFrontend(
+        email,
+        smtpResult.status,
+        Date.now(),
+        smtpResult,
+        sessionId
       );
-      // 🚫 DO NOT send WebSocket update yet — wait for webhook
     }
 
     // ..........................................................................this is updated by me

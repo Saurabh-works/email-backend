@@ -409,6 +409,11 @@ app.post("/send-email", async (req, res) => {
 
     // 🧠 Step 3: SMTP validation
     const smtpResult = await validateSMTP(email);
+
+    if (!smtpResult) {
+  console.log("⌛ Delaying response — SMTP taking longer.");
+  return res.status(200).json({ delayed: true }); // No DB write, no emit
+}
 //     let smtpResult;
 // try {
 //   smtpResult = await validateSMTP(email);

@@ -2,28 +2,28 @@
 // const SMTPConnection = require("smtp-connection");
 // const fs = require("fs");
 // const path = require("path");
- 
+
 // // ✅ Load a list of disposable domains (trimmed for demo, replace with full list)
 // const disposableDomains = fs
 //   .readFileSync(path.join(__dirname, "disposable_email_list.txt"), "utf8")
 //   .split(/\r?\n/)
 //   .filter(Boolean);
- 
+
 // const roleBasedUsernames = [
 //   "admin", "support", "info", "contact", "help",
 //   "sales", "marketing", "billing", "hr", "careers", "Finance"
 // ];
- 
+
 // const freeEmailDomains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com"];
- 
+
 // function getDomain(email) {
 //   return email.split("@")[1].toLowerCase();
 // }
- 
+
 // function getUsername(email) {
 //   return email.split("@")[0].toLowerCase();
 // }
- 
+
 // async function smtpCheck(email, mxHost) {
 //   return await new Promise((resolve) => {
 //     const connection = new SMTPConnection({
@@ -33,12 +33,12 @@
 //       tls: { rejectUnauthorized: false },
 //       socketTimeout: 10000,
 //     });
- 
+
 //     connection.on("error", (err) => {
 //       console.error(`SMTP error for ${email}:`, err.message);
 //       resolve(false);
 //     });
- 
+
 //     connection.connect(() => {
 //       connection.login({}, () => {
 //         connection.send(
@@ -60,31 +60,31 @@
 //     });
 //   });
 // }
- 
+
 // async function validateSMTP(email) {
 //   const domain = getDomain(email);
 //   const username = getUsername(email);
 //   let isValid = false;
 //   let isCatchAll = false;
- 
+
 //   try {
 //     const mxRecords = await dns.resolveMx(domain);
 //     if (!mxRecords.length) throw new Error("No MX records found");
 //     mxRecords.sort((a, b) => a.priority - b.priority);
 //     const mxHost = mxRecords[0].exchange;
- 
+
 //     isValid = await smtpCheck(email, mxHost);
- 
+
 //     const fakeEmail = `randomcheck${Date.now()}@${domain}`;
 //     isCatchAll = await smtpCheck(fakeEmail, mxHost);
 //   } catch (err) {
 //     console.warn(`DNS or SMTP failed for ${email}:`, err.message);
 //   }
- 
+
 //   const isDisposable = disposableDomains.includes(domain);
 //   const isFree = freeEmailDomains.includes(domain);
 //   const isRoleBased = roleBasedUsernames.includes(username);
- 
+
 //   // 🔢 Scoring
 //   let score = 100;
 //   if (!isValid) score -= 50;
@@ -93,7 +93,7 @@
 //   if (isFree) score -= 10;
 //   if (isRoleBased) score -= 10;
 //   if (score < 0) score = 0;
- 
+
 //   // 🧠 Category
 //   let category, status;
 //   if (isValid && !isCatchAll) {
@@ -109,7 +109,7 @@
 //     category = "invalid";
 //     status = "❌ Invalid";
 //   }
- 
+
 //   return {
 //     email,
 //     smtp: isValid,
@@ -123,14 +123,8 @@
 //     score
 //   };
 // }
- 
+
 // module.exports = { validateSMTP };
-
-
-
-
-
-
 
 // const dns = require("dns").promises;
 // const SMTPConnection = require("smtp-connection");
@@ -204,7 +198,6 @@
 //   ]);
 // }
 
-
 // async function validateSMTP(email) {
 //   const domain = getDomain(email);
 //   const username = getUsername(email);
@@ -269,13 +262,6 @@
 // }
 
 // module.exports = { validateSMTP };
- 
-
-
-
-
-
-
 
 const dns = require("dns").promises;
 const SMTPConnection = require("smtp-connection");
@@ -289,12 +275,25 @@ const disposableDomains = fs
   .filter(Boolean);
 
 const roleBasedUsernames = [
-  "admin", "support", "info", "contact", "help",
-  "sales", "marketing", "billing", "hr", "careers", "finance"
+  "admin",
+  "support",
+  "info",
+  "contact",
+  "help",
+  "sales",
+  "marketing",
+  "billing",
+  "hr",
+  "careers",
+  "finance",
 ];
 
 const freeEmailDomains = [
-  "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com"
+  "gmail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+  "aol.com",
 ];
 
 const domainBounceRates = {
@@ -355,7 +354,15 @@ async function validateSMTP(email) {
   const username = getUsername(email);
 
   if (shouldSkipDomain(domain)) {
-    return buildResult(email, domain, username, null, false, "❔ Skipped (High Bounce)", "unknown");
+    return buildResult(
+      email,
+      domain,
+      username,
+      null,
+      false,
+      "❔ Skipped (High Bounce)",
+      "unknown"
+    );
   }
 
   let mxHost;
@@ -365,7 +372,15 @@ async function validateSMTP(email) {
     mxRecords.sort((a, b) => a.priority - b.priority);
     mxHost = mxRecords[0].exchange;
   } catch (err) {
-    return buildResult(email, domain, username, null, false, "❔ Unknown (DNS Failed)", "unknown");
+    return buildResult(
+      email,
+      domain,
+      username,
+      null,
+      false,
+      "❔ Unknown (DNS Failed)",
+      "unknown"
+    );
   }
 
   const fakeEmail = `randomcheck${Date.now()}@${domain}`;
@@ -373,32 +388,111 @@ async function validateSMTP(email) {
   let catchAllResult = null;
 
   try {
-    [validResult, catchAllResult] = await Promise.all([
-      smtpCheck(email, mxHost, 5000),
-      smtpCheck(fakeEmail, mxHost, 5000),
-    ]);
+    // [validResult, catchAllResult] = await Promise.all([
+    //   smtpCheck(email, mxHost, 5000),
+    //   smtpCheck(fakeEmail, mxHost, 5000),
+    // ]);
+    console.time(`SMTP ${email}`);
+    validResult = await smtpCheck(email, mxHost, 6000);
+    console.timeEnd(`SMTP ${email}`);
+
+    if (validResult === true) {
+      // Optional: Perform catch-all check only if you want to detect risky domains later
+      catchAllResult = await smtpCheck(fakeEmail, mxHost, 6000);
+    } else {
+      catchAllResult = null;
+    }
   } catch (err) {
     console.warn("SMTP check exception:", err.message);
   }
 
-  // Determine category and status
-  if (validResult === false) {
-    return buildResult(email, domain, username, false, false, "❌ Invalid", "invalid");
-  }
+  // // Determine category and status
+  // if (validResult === false) {
+  //   return buildResult(
+  //     email,
+  //     domain,
+  //     username,
+  //     false,
+  //     false,
+  //     "❌ Invalid",
+  //     "invalid"
+  //   );
+  // }
 
-  if (validResult === true && catchAllResult === false) {
-    return buildResult(email, domain, username, true, false, "✅ Valid", "valid");
-  } else if (validResult === true && catchAllResult === true) {
-    return buildResult(email, domain, username, true, true, "⚠️ Risky (Catch-All)", "risky");
-  } // else if (validResult === null) {
-  //   return buildResult(email, domain, username, null, !!catchAllResult, "❔ Unknown (Timeout)", "unknown");
+  // if (validResult === true && catchAllResult === false) {
+  //   return buildResult(
+  //     email,
+  //     domain,
+  //     username,
+  //     true,
+  //     false,
+  //     "✅ Valid",
+  //     "valid"
+  //   );
+  // } else if (validResult === true && catchAllResult === true) {
+  //   return buildResult(
+  //     email,
+  //     domain,
+  //     username,
+  //     true,
+  //     true,
+  //     "⚠️ Risky (Catch-All)",
+  //     "risky"
+  //   );
+  // } else if (validResult === null) {
+  //   return buildResult(
+  //     email,
+  //     domain,
+  //     username,
+  //     null,
+  //     !!catchAllResult,
+  //     "❔ Unknown (Timeout)",
+  //     "unknown"
+  //   );
   //   // return null;
   // }
 
-  return buildResult(email, domain, username, false, !!catchAllResult, "❌ Invalid", "invalid");
+   // return buildResult(
+  //   email,
+  //   domain,
+  //   username,
+  //   false,
+  //   !!catchAllResult,
+  //   "❌ Invalid",
+  //   "invalid"
+  // );
+
+  if (validResult === false) {
+  return buildResult(email, domain, username, false, false, "❌ Invalid", "invalid");
 }
 
-function buildResult(email, domain, username, isValid, isCatchAll, status, category) {
+if (validResult === true && catchAllResult === false) {
+  return buildResult(email, domain, username, true, false, "✅ Valid", "valid");
+}
+
+if (validResult === true && catchAllResult === true) {
+  return buildResult(email, domain, username, true, true, "⚠️ Risky (Catch-All)", "risky");
+}
+
+// If valid is true but catchAll is unknown (timeout), still return "Valid"
+if (validResult === true && catchAllResult === null) {
+  return buildResult(email, domain, username, true, null, "✅ Valid", "valid");
+}
+
+// If valid result is null
+return buildResult(email, domain, username, null, !!catchAllResult, "❔ Unknown (Timeout)", "unknown");
+ 
+}
+
+function buildResult(
+  email,
+  domain,
+  username,
+  isValid,
+  isCatchAll,
+  status,
+  category
+) {
   const isDisposable = disposableDomains.includes(domain);
   const isFree = freeEmailDomains.includes(domain);
   const isRoleBased = roleBasedUsernames.includes(username);
@@ -426,7 +520,3 @@ function buildResult(email, domain, username, isValid, isCatchAll, status, categ
 }
 
 module.exports = { validateSMTP };
-
-
-
-

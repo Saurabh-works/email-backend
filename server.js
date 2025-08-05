@@ -408,7 +408,20 @@ app.post("/send-email", async (req, res) => {
     }
 
     // 🧠 Step 3: SMTP validation
-    const smtpResult = await validateSMTP(email);
+    // const smtpResult = await validateSMTP(email);
+    let smtpResult;
+try {
+  smtpResult = await validateSMTP(email);
+} catch (err) {
+  console.error("SMTP validation failed:", err.message);
+}
+
+if (!smtpResult) {
+  console.log("⌛ Delaying response — SMTP taking longer.");
+  // Don't emit or save anything yet. Let webhook handle it.
+  return res.status(200).json({ delayed: true });
+}
+
 
     // ❌ 3.a: If invalid → directly block
     if (smtpResult.category === "invalid") {

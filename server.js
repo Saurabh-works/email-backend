@@ -519,10 +519,24 @@ app.post("/send-email", async (req, res) => {
       },
     };
 
+    // await dynamicSES.send(new SendEmailCommand(params));
+    // await incrementStat(region, "sent");
+
+    // // ⚡️ Don't send frontend result now → frontend will wait for webhook
+    // res.json({ success: true });
+
     await dynamicSES.send(new SendEmailCommand(params));
     await incrementStat(region, "sent");
 
-    // ⚡️ Don't send frontend result now → frontend will wait for webhook
+    // ✅ Emit result immediately (don't wait for webhook)
+    sendStatusToFrontend(
+      email,
+      smtpResult.status,
+      Date.now(),
+      smtpResult,
+      sessionId
+    );
+
     res.json({ success: true });
   } catch (err) {
     console.error("❌ Error in /send-email:", err.message);

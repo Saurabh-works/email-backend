@@ -315,7 +315,7 @@ function shouldSkipDomain(domain) {
   return bounceRate >= 0.8;
 }
 
-async function smtpCheck(email, mxHost, timeout = 3000) {
+async function smtpCheck(email, mxHost, timeout = 10000) {
   return await Promise.race([
     new Promise((resolve) => {
       const connection = new SMTPConnection({

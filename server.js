@@ -700,9 +700,97 @@ app.post("/send-email", async (req, res) => {
 //   }
 // });
 
+// app.post("/ses-webhook", async (req, res) => {
+//   try {
+//     console.log("📥 SNS Webhook Hit");
+//     const snsMessage =
+//       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
+//     if (snsMessage.Type === "SubscriptionConfirmation") {
+//       console.log("🔗 Confirming SNS subscription...");
+//       await axios.get(snsMessage.SubscribeURL);
+//       return res.status(200).send("Subscription confirmed");
+//     }
+
+//     if (snsMessage.Type === "Notification") {
+//       console.log("🔔 Notification received");
+//       const messageBody =
+//         typeof snsMessage.Message === "string"
+//           ? JSON.parse(snsMessage.Message)
+//           : snsMessage.Message;
+//       const email = messageBody.mail.destination[0];
+//       const sessionId = sessionEmailMap.get(email);
+//       sessionEmailMap.delete(email); // clean up
+
+//       const timestamp =
+//         messageBody.bounce?.timestamp || messageBody.mail.timestamp;
+//       const notificationType = messageBody.notificationType;
+//       const domain = extractDomain(email);
+
+//       const cached = await EmailLog.findOne({ email }).sort({ createdAt: -1 });
+
+//       // 🚫 If cached email was marked as "⚠️ Risky (High Bounce Domain)", ignore notification
+//       if (cached && cached.status === "⚠️ Risky (High Bounce Domain)") {
+//         console.log(
+//           `⚠️ Ignored SNS notification for high bounce domain risky email: ${email}`
+//         );
+//         return res.status(200).send("Ignored High Bounce Risky Email");
+//       }
+
+//       const provider = await detectProviderByMX(domain);
+//       const isDisposable = disposableDomains.includes(domain);
+//       const isFree = freeEmailProviders.includes(domain);
+//       const isRoleBased = roleBasedEmails.includes(
+//         email.split("@")[0].toLowerCase()
+//       );
+
+//       const status =
+//         notificationType === "Delivery" ? "✅ Valid Email" : "❌ Invalid Email";
+
+//       // Track domain reputation
+//       const statUpdate =
+//         notificationType === "Bounce"
+//           ? { $inc: { sent: 1, invalid: 1 } }
+//           : { $inc: { sent: 1 } };
+
+//       await DomainReputation.updateOne({ domain }, statUpdate, {
+//         upsert: true,
+//       });
+
+//       if (notificationType === "Bounce") {
+//         const region = getBestRegion();
+//         await incrementStat(region, "bounce");
+//       }
+
+//       // ✅ Only update frontend if NOT a risky high bounce domain
+//       sendStatusToFrontend(
+//         email,
+//         status,
+//         timestamp,
+//         {
+//           domain,
+//           provider,
+//           isDisposable,
+//           isFree,
+//           isRoleBased,
+//         },
+//         sessionId
+//       );
+
+//       return res.status(200).send("OK");
+//     }
+
+//     return res.status(200).send("Ignored non-notification SNS message");
+//   } catch (error) {
+//     console.error("❌ SNS Webhook Error:", error.message);
+//     return res.status(400).send("Bad Request");
+//   }
+// });
+
 app.post("/ses-webhook", async (req, res) => {
   try {
     console.log("📥 SNS Webhook Hit");
+
     const snsMessage =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
@@ -714,10 +802,12 @@ app.post("/ses-webhook", async (req, res) => {
 
     if (snsMessage.Type === "Notification") {
       console.log("🔔 Notification received");
+
       const messageBody =
         typeof snsMessage.Message === "string"
           ? JSON.parse(snsMessage.Message)
           : snsMessage.Message;
+
       const email = messageBody.mail.destination[0];
       const sessionId = sessionEmailMap.get(email);
       sessionEmailMap.delete(email); // clean up
@@ -729,7 +819,7 @@ app.post("/ses-webhook", async (req, res) => {
 
       const cached = await EmailLog.findOne({ email }).sort({ createdAt: -1 });
 
-      // 🚫 If cached email was marked as "⚠️ Risky (High Bounce Domain)", ignore notification
+      // 🚫 If cached email was marked as "⚠️ Risky (High Bounce Domain)", ignore
       if (cached && cached.status === "⚠️ Risky (High Bounce Domain)") {
         console.log(
           `⚠️ Ignored SNS notification for high bounce domain risky email: ${email}`
@@ -746,8 +836,23 @@ app.post("/ses-webhook", async (req, res) => {
 
       const status =
         notificationType === "Delivery" ? "✅ Valid Email" : "❌ Invalid Email";
+      const category = status.includes("Valid") ? "valid" : "invalid";
 
-      // Track domain reputation
+      // ✅ Save to EmailLog
+      await EmailLog.create({
+        email,
+        domain,
+        domainProvider: provider,
+        isDisposable,
+        isFree,
+        isRoleBased,
+        status,
+        category,
+        timestamp: new Date(timestamp),
+        expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      });
+
+      // 📈 Update domain reputation
       const statUpdate =
         notificationType === "Bounce"
           ? { $inc: { sent: 1, invalid: 1 } }
@@ -762,7 +867,7 @@ app.post("/ses-webhook", async (req, res) => {
         await incrementStat(region, "bounce");
       }
 
-      // ✅ Only update frontend if NOT a risky high bounce domain
+      // ✅ Emit result to frontend
       sendStatusToFrontend(
         email,
         status,
@@ -786,6 +891,7 @@ app.post("/ses-webhook", async (req, res) => {
     return res.status(400).send("Bad Request");
   }
 });
+
 
 // 🧾 Return a clean Excel Template
 app.get("/download-template", (req, res) => {

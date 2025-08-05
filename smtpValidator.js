@@ -374,8 +374,8 @@ async function validateSMTP(email) {
 
   try {
     [validResult, catchAllResult] = await Promise.all([
-      smtpCheck(email, mxHost, 3000),
-      smtpCheck(fakeEmail, mxHost, 3000),
+      smtpCheck(email, mxHost, 6000),
+      smtpCheck(fakeEmail, mxHost, 6000),
     ]);
   } catch (err) {
     console.warn("SMTP check exception:", err.message);

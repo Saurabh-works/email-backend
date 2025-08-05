@@ -284,6 +284,7 @@ const SMTPConnection = require("smtp-connection");
 const fs = require("fs");
 const path = require("path");
 
+// Load disposable domains
 const disposableDomains = fs
   .readFileSync(path.join(__dirname, "disposable_email_list.txt"), "utf8")
   .split(/\r?\n/)
@@ -316,7 +317,7 @@ function shouldSkipDomain(domain) {
   return bounceRate >= 0.8;
 }
 
-async function smtpCheck(email, mxHost, timeout = 5000) {
+async function smtpCheck(email, mxHost, timeout = 3000) {
   return await Promise.race([
     new Promise((resolve) => {
       const connection = new SMTPConnection({
@@ -327,10 +328,7 @@ async function smtpCheck(email, mxHost, timeout = 5000) {
         socketTimeout: timeout - 500,
       });
 
-      connection.on("error", (err) => {
-        console.error(`SMTP error for ${email}:`, err.message);
-        resolve(null);
-      });
+      connection.on("error", () => resolve(null));
 
       connection.connect(() => {
         connection.login({}, () => {
@@ -342,22 +340,15 @@ async function smtpCheck(email, mxHost, timeout = 5000) {
             "",
             (err) => {
               connection.quit();
-              if (err && err.code === "EENVELOPE") {
-                resolve(false);
-              } else {
-                resolve(true);
-              }
+              if (err && err.code === "EENVELOPE") resolve(false);
+              else resolve(true);
             }
           );
         });
       });
     }),
-    new Promise((resolve) =>
-      setTimeout(() => {
-        console.warn(`⏱️ SMTP timeout for ${email}`);
-        resolve(null);
-      }, timeout)
-    ),
+
+    new Promise((resolve) => setTimeout(() => resolve(null), timeout)),
   ]);
 }
 
@@ -366,7 +357,6 @@ async function validateSMTP(email) {
   const username = getUsername(email);
 
   if (shouldSkipDomain(domain)) {
-    console.log(`🚫 Skipping ${email} due to bounceRate`);
     return buildResult(email, domain, username, null, false, "❔ Skipped (High Bounce)", "unknown");
   }
 
@@ -377,32 +367,27 @@ async function validateSMTP(email) {
     mxRecords.sort((a, b) => a.priority - b.priority);
     mxHost = mxRecords[0].exchange;
   } catch (err) {
-    console.warn(`⚠️ DNS lookup failed for ${domain}:`, err.message);
     return buildResult(email, domain, username, null, false, "❔ Unknown (DNS Failed)", "unknown");
   }
 
-  // 🔄 Parallel real + fake check
+  const fakeEmail = `randomcheck${Date.now()}@${domain}`;
   let validResult = null;
   let catchAllResult = null;
 
   try {
-    const fakeEmail = `randomcheck${Date.now()}@${domain}`;
-    const [real, fake] = await Promise.all([
-      smtpCheck(email, mxHost, 5000),
-      smtpCheck(fakeEmail, mxHost, 7000),
+    [validResult, catchAllResult] = await Promise.all([
+      smtpCheck(email, mxHost, 3000),
+      smtpCheck(fakeEmail, mxHost, 3000),
     ]);
-    validResult = real;
-    catchAllResult = fake;
-  } catch (e) {
-    console.warn(`SMTP exception for ${email}:`, e.message);
+  } catch (err) {
+    console.warn("SMTP check exception:", err.message);
   }
 
-  // 🚀 Early invalid response
+  // Determine category and status
   if (validResult === false) {
     return buildResult(email, domain, username, false, false, "❌ Invalid", "invalid");
   }
 
-  // Return based on results
   if (validResult === true && catchAllResult === false) {
     return buildResult(email, domain, username, true, false, "✅ Valid", "valid");
   } else if (validResult === true && catchAllResult === true) {
@@ -442,6 +427,7 @@ function buildResult(email, domain, username, isValid, isCatchAll, status, categ
 }
 
 module.exports = { validateSMTP };
+
 
 
 

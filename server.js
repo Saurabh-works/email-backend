@@ -111,6 +111,7 @@ const allowedOrigins = [
   "https://77fd70c33625.ngrok-free.app",
   "https://13.218.96.234:5000",
   "https://truenotsendr.com",
+  "https://truesendr007.netlify.app",
 ];
 
 // app.use(cors({

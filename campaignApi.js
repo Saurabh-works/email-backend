@@ -78,10 +78,7 @@ function getRealIp(req) {
   const xfwd = req.headers["x-forwarded-for"];
   if (xfwd) return xfwd.split(",")[0].trim();
   return (
-    requestIp.getClientIp(req) ||
-    req.connection?.remoteAddress ||
-    req.socket?.remoteAddress ||
-    ""
+    req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || ""
   );
 }
 

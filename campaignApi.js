@@ -75,15 +75,15 @@ const sesClient = new SESClient({
 // }
 
 function getRealIp(req) {
-  const xfwd = req.headers['x-forwarded-for'];
-  if (xfwd) return xfwd.split(',')[0].trim();
-
   return (
-    req.connection?.remoteAddress?.replace(/^::ffff:/, '') ||
-    req.socket?.remoteAddress?.replace(/^::ffff:/, '') ||
-    ''
+    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+    req.ip ||
+    req.connection?.remoteAddress ||
+    req.socket?.remoteAddress ||
+    ""
   );
 }
+
 
 
 

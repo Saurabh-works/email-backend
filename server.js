@@ -410,23 +410,51 @@ app.post("/send-email", async (req, res) => {
     // 🧠 Step 3: SMTP validation
     const smtpResult = await validateSMTP(email);
 
-//     if (!smtpResult) {
-//   console.log("⌛ Delaying response — SMTP taking longer.");
-//   return res.status(200).json({ delayed: true }); // No DB write, no emit
-// }
-//     let smtpResult;
-// try {
-//   smtpResult = await validateSMTP(email);
-// } catch (err) {
-//   console.error("SMTP validation failed:", err.message);
-// }
+    // ⏳ If Unknown → Delay 2s and re-check
+    if (smtpResult.category === "unknown") {
+      console.log("🕒 Unknown result — waiting 2s for SES to confirm...");
+      setTimeout(async () => {
+        const updated = await EmailLog.findOne({ email }).sort({
+          createdAt: -1,
+        });
+        if (updated && updated.status !== "❔ Unknown") {
+          console.log("🔁 Updated status found in DB:", updated.status);
+          sendStatusToFrontend(
+            email,
+            updated.status,
+            updated.timestamp,
+            updated,
+            sessionId
+          );
+        } else {
+          console.log("❔ Still unknown — emitting fallback");
+          sendStatusToFrontend(
+            email,
+            smtpResult.status,
+            Date.now(),
+            smtpResult,
+            sessionId
+          );
+        }
+      }, 2000);
+    }
 
-// if (!smtpResult) {
-//   console.log("⌛ Delaying response — SMTP taking longer.");
-//   // Don't emit or save anything yet. Let webhook handle it.
-//   return res.status(200).json({ delayed: true });
-// }
+    //     if (!smtpResult) {
+    //   console.log("⌛ Delaying response — SMTP taking longer.");
+    //   return res.status(200).json({ delayed: true }); // No DB write, no emit
+    // }
+    //     let smtpResult;
+    // try {
+    //   smtpResult = await validateSMTP(email);
+    // } catch (err) {
+    //   console.error("SMTP validation failed:", err.message);
+    // }
 
+    // if (!smtpResult) {
+    //   console.log("⌛ Delaying response — SMTP taking longer.");
+    //   // Don't emit or save anything yet. Let webhook handle it.
+    //   return res.status(200).json({ delayed: true });
+    // }
 
     // ❌ 3.a: If invalid → directly block
     if (smtpResult.category === "invalid") {
@@ -562,231 +590,26 @@ app.post("/send-email", async (req, res) => {
   }
 });
 
-// app.post("/send-email", async (req, res) => {
-//   try {
-//     const { email, sessionId } =
-//       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+// GET /status-check?email=someone@example.com
+app.get("/status-check", async (req, res) => {
+  const { email } = req.query;
+  if (!email) return res.status(400).json({ error: "Email is required" });
 
-//     if (sessionId) {
-//       sessionEmailMap.set(email, sessionId);
-//     }
+  const latest = await EmailLog.findOne({ email }).sort({ createdAt: -1 });
+  if (!latest) return res.status(404).json({ error: "Not found" });
 
-//     if (!email) return res.status(400).json({ error: "Email is required" });
-
-//     const domain = extractDomain(email);
-
-//     // 🧠 Step 1: Domain-level bounce analysis
-//     const domainStats = await DomainReputation.findOne({ domain });
-//     if (domainStats && domainStats.sent >= 5) {
-//       const bounceRate = domainStats.invalid / domainStats.sent;
-//       if (bounceRate >= 0.6) {
-//         console.log(
-//           `🚫 Skipping email from bad domain (${domain}), bounceRate: ${bounceRate.toFixed(
-//             2
-//           )}`
-//         );
-//         sendStatusToFrontend(email, "⚠️ Risky (High Bounce Domain)", null, {
-//           domain,
-//           provider: await detectProviderByMX(domain),
-//           isDisposable: disposableDomains.includes(domain),
-//           isFree: freeEmailProviders.includes(domain),
-//           isRoleBased: roleBasedEmails.includes(
-//             email.split("@")[0].toLowerCase()
-//           ),
-//         });
-//         return res
-//           .status(200)
-//           .json({ skipped: true, reason: "High bounce domain" });
-//       }
-//     }
-
-//     // 🧠 Step 2: Cache lookup
-//     const cached = await EmailLog.findOne({ email }).sort({ createdAt: -1 });
-
-//     if (cached) {
-//       const ageMs = Date.now() - new Date(cached.createdAt).getTime();
-//       const isFresh = ageMs < 10 * 24 * 60 * 60 * 1000; // 10 days
-
-//       const isValidType =
-//         cached.status.includes("✅") ||
-//         cached.status.includes("⚠️") ||
-//         cached.status.includes("Unknown");
-
-//       // ✅ If Valid, Risky, Unknown → check freshness
-//       // ✅ If Invalid → reuse permanently
-//       if ((isValidType && isFresh) || cached.status.includes("❌")) {
-//         console.log("📦 Using cached validation result for", email);
-//         sendStatusToFrontend(
-//           email,
-//           cached.status,
-//           cached.timestamp,
-//           {
-//             domain: cached.domain,
-//             provider: cached.domainProvider,
-//             isDisposable: cached.isDisposable,
-//             isFree: cached.isFree,
-//             isRoleBased: cached.isRoleBased,
-//           },
-//           sessionId
-//         );
-//         return res.json({ success: true, cached: true });
-//       }
-//     }
-
-//     // 🧠 Step 3: SMTP validation
-//     const smtpResult = await validateSMTP(email);
-
-//     // ❌ 3.a: If invalid → directly block
-//     if (smtpResult.category === "invalid") {
-//       console.log("⛔ Not sending (invalid):", smtpResult.status);
-//       sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
-//       return res.status(200).json({ skipped: true, reason: "SMTP invalid" });
-//     }
-
-//     // ⚠️ 3.b: If risky
-//     if (smtpResult.category === "risky") {
-//       const previouslySent = await EmailLog.findOne({ email });
-
-//       if (previouslySent) {
-//         console.log(
-//           "⛔ Not sending (risky, already attempted):",
-//           smtpResult.status
-//         );
-//         sendStatusToFrontend(email, smtpResult.status, null, smtpResult);
-//         return res
-//           .status(200)
-//           .json({ skipped: true, reason: "SMTP risky (already tried)" });
-//       }
-
-//       console.log(
-//         "⚠️ First-time risky (catch-all) — sending allowed. Waiting for SES result."
-//       );
-//       // 🚫 DO NOT send WebSocket update yet — wait for webhook
-//     }
-
-//     // 🧠 Step 4: Send email via SES
-//     const region = getBestRegion();
-//     console.log("📤 Using SES region:", region);
-
-//     const dynamicSES = new SESClient({
-//       region,
-//       credentials: {
-//         accessKeyId: process.env.AWS_SMTP_USER,
-//         secretAccessKey: process.env.AWS_SMTP_PASS,
-//       },
-//     });
-
-//     const params = {
-//       Source: process.env.VERIFIED_EMAIL,
-//       Destination: { ToAddresses: [email] },
-//       Message: {
-//         Subject: { Data: "Hope this finds you well 😊" },
-//         Body: {
-//           Text: {
-//             Data: `Hey there!\n\nJust wanted to say a quick hello and check if everything’s going smoothly.\nFeel free to get in touch anytime — we’re always here to help.\n\nWarm wishes,\nJenny\nTeam TrueSendr`,
-//           },
-//         },
-//       },
-//     };
-
-//     await dynamicSES.send(new SendEmailCommand(params));
-//     await incrementStat(region, "sent");
-
-//     // ⚡️ Don't send frontend result now → frontend will wait for webhook
-//     res.json({ success: true });
-//   } catch (err) {
-//     console.error("❌ Error in /send-email:", err.message);
-//     res.status(500).json({ error: err.message });
-//   }
-// });
-
-// app.post("/ses-webhook", async (req, res) => {
-//   try {
-//     console.log("📥 SNS Webhook Hit");
-//     const snsMessage =
-//       typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
-//     if (snsMessage.Type === "SubscriptionConfirmation") {
-//       console.log("🔗 Confirming SNS subscription...");
-//       await axios.get(snsMessage.SubscribeURL);
-//       return res.status(200).send("Subscription confirmed");
-//     }
-
-//     if (snsMessage.Type === "Notification") {
-//       console.log("🔔 Notification received");
-//       const messageBody =
-//         typeof snsMessage.Message === "string"
-//           ? JSON.parse(snsMessage.Message)
-//           : snsMessage.Message;
-//       const email = messageBody.mail.destination[0];
-//       const sessionId = sessionEmailMap.get(email);
-//       sessionEmailMap.delete(email); // clean up
-
-//       const timestamp =
-//         messageBody.bounce?.timestamp || messageBody.mail.timestamp;
-//       const notificationType = messageBody.notificationType;
-//       const domain = extractDomain(email);
-
-//       const cached = await EmailLog.findOne({ email }).sort({ createdAt: -1 });
-
-//       // 🚫 If cached email was marked as "⚠️ Risky (High Bounce Domain)", ignore notification
-//       if (cached && cached.status === "⚠️ Risky (High Bounce Domain)") {
-//         console.log(
-//           `⚠️ Ignored SNS notification for high bounce domain risky email: ${email}`
-//         );
-//         return res.status(200).send("Ignored High Bounce Risky Email");
-//       }
-
-//       const provider = await detectProviderByMX(domain);
-//       const isDisposable = disposableDomains.includes(domain);
-//       const isFree = freeEmailProviders.includes(domain);
-//       const isRoleBased = roleBasedEmails.includes(
-//         email.split("@")[0].toLowerCase()
-//       );
-
-//       const status =
-//         notificationType === "Delivery" ? "✅ Valid Email" : "❌ Invalid Email";
-
-//       // Track domain reputation
-//       const statUpdate =
-//         notificationType === "Bounce"
-//           ? { $inc: { sent: 1, invalid: 1 } }
-//           : { $inc: { sent: 1 } };
-
-//       await DomainReputation.updateOne({ domain }, statUpdate, {
-//         upsert: true,
-//       });
-
-//       if (notificationType === "Bounce") {
-//         const region = getBestRegion();
-//         await incrementStat(region, "bounce");
-//       }
-
-//       // ✅ Only update frontend if NOT a risky high bounce domain
-//       sendStatusToFrontend(
-//         email,
-//         status,
-//         timestamp,
-//         {
-//           domain,
-//           provider,
-//           isDisposable,
-//           isFree,
-//           isRoleBased,
-//         },
-//         sessionId
-//       );
-
-//       return res.status(200).send("OK");
-//     }
-
-//     return res.status(200).send("Ignored non-notification SNS message");
-//   } catch (error) {
-//     console.error("❌ SNS Webhook Error:", error.message);
-//     return res.status(400).send("Bad Request");
-//   }
-// });
-
+  return res.json({
+    email: latest.email,
+    status: latest.status,
+    timestamp: latest.timestamp,
+    domain: latest.domain,
+    domainProvider: latest.domainProvider,
+    isDisposable: latest.isDisposable,
+    isFree: latest.isFree,
+    isRoleBased: latest.isRoleBased,
+    score: latest.score,
+  });
+});
 
 app.post("/ses-webhook", async (req, res) => {
   try {
@@ -892,7 +715,6 @@ app.post("/ses-webhook", async (req, res) => {
     return res.status(400).send("Bad Request");
   }
 });
-
 
 // 🧾 Return a clean Excel Template
 app.get("/download-template", (req, res) => {

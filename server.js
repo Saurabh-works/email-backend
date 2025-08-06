@@ -49,8 +49,8 @@ const mailpreviewApi = require("./mailpreviewApi");
 // };
 
 const app = express();
-// app.set("trust proxy", true); // ✅ Add this line it should forward the original visitor IP
-app.set('trust proxy', 2); // Trust 2 proxies: Netlify and Nginx
+app.set("trust proxy", true); // ✅ Add this line it should forward the original visitor IP
+// app.set('trust proxy', 2); // Trust 2 proxies: Netlify and Nginx
 
 
 const PORT = 5000;

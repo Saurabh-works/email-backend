@@ -43,16 +43,37 @@ const sesClient = new SESClient({
   },
 });
 
+// function getRealIp(req) {
+//   const xfwd = req.headers["x-forwarded-for"];
+//   if (xfwd) return xfwd.split(",")[0].trim();
+//   return (
+//     requestIp.getClientIp(req) ||
+//     req.connection?.remoteAddress ||
+//     req.socket?.remoteAddress ||
+//     ""
+//   );
+// }
+
+
 function getRealIp(req) {
-  const xfwd = req.headers["x-forwarded-for"];
-  if (xfwd) return xfwd.split(",")[0].trim();
+  // ✅ Netlify-specific header (most reliable when coming via Netlify frontend)
+  if (req.headers['x-nf-client-connection-ip']) {
+    return req.headers['x-nf-client-connection-ip'];
+  }
+
+  // ✅ Standard X-Forwarded-For header (set by proxies like Nginx)
+  if (req.headers['x-forwarded-for']) {
+    return req.headers['x-forwarded-for'].split(',')[0].trim();
+  }
+
+  // ✅ Standard Express fallback chain
   return (
-    requestIp.getClientIp(req) ||
-    req.connection?.remoteAddress ||
-    req.socket?.remoteAddress ||
-    ""
+    req.connection?.remoteAddress?.replace(/^::ffff:/, '') ||
+    req.socket?.remoteAddress?.replace(/^::ffff:/, '') ||
+    ''
   );
 }
+
 
 
 const isBot = (ua) => /bot|crawler|preview|headless/i.test(ua);

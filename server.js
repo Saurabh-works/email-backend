@@ -389,5 +389,5 @@ app.use("/api/preview", mailpreviewApi);
 // server.js or smtpValidator.js
 // module.exports = { validateSMTP, sessionClients };
 
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, '127.0.0.1', () => console.log(`🚀 Server running on port ${PORT}`));
 // server.listen(PORT, () => console.log(`🔒 HTTPS Server running at https://localhost:${PORT}`));  //changes by saurabh

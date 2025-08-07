@@ -51,15 +51,20 @@ const mailpreviewApi = require("./mailpreviewApi");
 const app = express();
 app.set("trust proxy", true); // ✅ Add this line it should forward the original visitor IP
 // app.set("trust proxy", 2); // Trust 2 proxies: Netlify and Nginx
+// app.use((req, res, next) => {
+//   console.log("---- FULL DEBUG ----");
+//   console.log("req.ip:", req.ip);
+//   console.log("X-Forwarded-For:", req.headers["x-forwarded-for"]);
+//   console.log("X-Real-IP:", req.headers["x-real-ip"]);
+//   console.log("remoteAddress:", req.connection?.remoteAddress);
+//   console.log("socketAddress:", req.socket?.remoteAddress);
+//   console.log("All headers:", req.headers);
+//   console.log("---------------------");
+//   next();
+// });
+
 app.use((req, res, next) => {
-  console.log("---- FULL DEBUG ----");
-  console.log("req.ip:", req.ip);
-  console.log("X-Forwarded-For:", req.headers["x-forwarded-for"]);
-  console.log("X-Real-IP:", req.headers["x-real-ip"]);
-  console.log("remoteAddress:", req.connection?.remoteAddress);
-  console.log("socketAddress:", req.socket?.remoteAddress);
-  console.log("All headers:", req.headers);
-  console.log("---------------------");
+  console.log("Full Headers:", req.headers);
   next();
 });
 

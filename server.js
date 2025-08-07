@@ -79,10 +79,10 @@ app.use((req, res, next) => {
   next();
 });
 
-app.set('trust proxy', (ip) => {
-  console.log("Incoming request from IP:", ip);
-  return true; // Trust all proxies (NGINX, etc.)
-});
+// app.set('trust proxy', (ip) => {
+//   console.log("Incoming request from IP:", ip);
+//   return true; // Trust all proxies (NGINX, etc.)
+// });
 
 const PORT = 5000;
 const server = http.createServer(app);

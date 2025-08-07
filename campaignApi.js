@@ -788,8 +788,12 @@ router.get("/campaign-csv", async (req, res) => {
 
 router.get('/myip', (req, res) => {
   res.send({
-    ip: getRealIp(req),
-    allHeaders: req.headers
+    ip: req.ip,
+    x_forwarded_for: req.headers['x-forwarded-for'],
+    x_real_ip: req.headers['x-real-ip'],
+    remoteAddress: req.connection?.remoteAddress,
+    socketAddress: req.socket?.remoteAddress,
+    headers: req.headers,
   });
 });
 

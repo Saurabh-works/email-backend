@@ -49,8 +49,8 @@ const mailpreviewApi = require("./mailpreviewApi");
 // };
 
 const app = express();
-app.set("trust proxy", true); // ✅ Add this line it should forward the original visitor IP
-// app.set("trust proxy", 1); // Trust 2 proxies: Netlify and Nginx
+// app.set("trust proxy", true); // ✅ Add this line it should forward the original visitor IP
+app.set("trust proxy", 2); // Trust 2 proxies: Netlify and Nginx
 app.use((req, res, next) => {
   console.log("Client IP (req.ip):", req.ip);
   console.log("Forwarded IP Header:", req.headers["x-forwarded-for"]);

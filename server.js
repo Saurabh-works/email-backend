@@ -49,7 +49,7 @@ const mailpreviewApi = require("./mailpreviewApi");
 // };
 
 const app = express();
-app.set("trust proxy", true); // ✅ Add this line it should forward the original visitor IP
+app.set('trust proxy', true); // ✅ Add this line it should forward the original visitor IP
 // app.set('trust proxy', 'loopback');
 // app.set('trust proxy', ['loopback', 'uniquelocal', 'linklocal']);
 

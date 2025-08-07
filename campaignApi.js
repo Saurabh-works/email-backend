@@ -787,13 +787,13 @@ router.get("/campaign-csv", async (req, res) => {
 // });
 
 router.get('/myip', (req, res) => {
-  res.send({
-    ip: req.ip,
-    x_forwarded_for: req.headers['x-forwarded-for'],
-    x_real_ip: req.headers['x-real-ip'],
+  const realIp = req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.ip;
+  res.json({
+    realIp,
+    req_ip: req.ip,
     remoteAddress: req.connection?.remoteAddress,
     socketAddress: req.socket?.remoteAddress,
-    headers: req.headers,
+    headers: req.headers
   });
 });
 

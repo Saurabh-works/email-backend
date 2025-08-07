@@ -37,6 +37,8 @@ const mongoose = require("mongoose");
 const EmailLog = require("./models/EmailLog");
 const contactApi = require("./contactApi");
 const mailpreviewApi = require("./mailpreviewApi");
+const requestIp = require('request-ip');
+
 
 // const sslOptions = {
 //   key: fs.readFileSync("./localhost-key.pem"),
@@ -50,6 +52,8 @@ const mailpreviewApi = require("./mailpreviewApi");
 
 const app = express();
 app.set('trust proxy', true); // ✅ Add this line it should forward the original visitor IP
+app.use(requestIp.mw());      // This adds `req.clientIp`
+
 // app.set('trust proxy', 'loopback');
 // app.set('trust proxy', ['loopback', 'uniquelocal', 'linklocal']);
 
@@ -389,5 +393,5 @@ app.use("/api/preview", mailpreviewApi);
 // server.js or smtpValidator.js
 // module.exports = { validateSMTP, sessionClients };
 
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 // server.listen(PORT, () => console.log(`🔒 HTTPS Server running at https://localhost:${PORT}`));  //changes by saurabh

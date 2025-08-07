@@ -786,13 +786,26 @@ router.get("/campaign-csv", async (req, res) => {
 //   });
 // });
 
+// router.get('/myip', (req, res) => {
+//   const realIp = req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.ip;
+//   res.json({
+//     realIp,
+//     req_ip: req.ip,
+//     remoteAddress: req.connection?.remoteAddress,
+//     socketAddress: req.socket?.remoteAddress,
+//     headers: req.headers
+//   });
+// });
+
 router.get('/myip', (req, res) => {
-  const realIp = req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.ip;
+  const realIp = req.clientIp || req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.ip;
+
   res.json({
     realIp,
     req_ip: req.ip,
     remoteAddress: req.connection?.remoteAddress,
     socketAddress: req.socket?.remoteAddress,
+    clientIp: req.clientIp,
     headers: req.headers
   });
 });

@@ -49,9 +49,9 @@ const mailpreviewApi = require("./mailpreviewApi");
 // };
 
 const app = express();
-// app.set("trust proxy", true); // ✅ Add this line it should forward the original visitor IP
+app.set("trust proxy", true); // ✅ Add this line it should forward the original visitor IP
 // app.set('trust proxy', 'loopback');
-app.set('trust proxy', ['loopback', 'uniquelocal', 'linklocal']);
+// app.set('trust proxy', ['loopback', 'uniquelocal', 'linklocal']);
 
 // app.set('trust proxy', function (ip) {
 //   // Trust only if from loopback or specific known ranges

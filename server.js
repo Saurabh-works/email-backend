@@ -37,7 +37,7 @@ const mongoose = require("mongoose");
 const EmailLog = require("./models/EmailLog");
 const contactApi = require("./contactApi");
 const mailpreviewApi = require("./mailpreviewApi");
-const requestIp = require('request-ip');
+// const requestIp = require('request-ip');
 
 
 // const sslOptions = {
@@ -52,7 +52,7 @@ const requestIp = require('request-ip');
 
 const app = express();
 app.set('trust proxy', true); // ✅ Add this line it should forward the original visitor IP
-app.use(requestIp.mw());      // This adds `req.clientIp`
+// app.use(requestIp.mw());      // This adds `req.clientIp`
 
 // app.set('trust proxy', 'loopback');
 // app.set('trust proxy', ['loopback', 'uniquelocal', 'linklocal']);

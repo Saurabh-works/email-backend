@@ -477,20 +477,48 @@ router.post("/send-campaign", async (req, res) => {
   }
 });
 
-router.post("/mark-bounce", async (req, res) => {
-  const { emailId, recipientId } = req.body;
-  if (!emailId || !recipientId)
-    return res.status(400).json({ error: "Missing emailId or recipientId" });
+// router.post("/mark-bounce", async (req, res) => {
+//   const { emailId, recipientId } = req.body;
+//   if (!emailId || !recipientId)
+//     return res.status(400).json({ error: "Missing emailId or recipientId" });
 
-  await Promise.all([
-    Log.updateMany({ recipientId }, { $set: { bounceStatus: true } }),
-    campaignConn
-      .collection(emailId)
-      .updateMany({ recipientId }, { $set: { bounceStatus: true } }),
+//   await Promise.all([
+//     Log.updateMany({ recipientId }, { $set: { bounceStatus: true } }),
+//     campaignConn
+//       .collection(emailId)
+//       .updateMany({ recipientId }, { $set: { bounceStatus: true } }),
+//   ]);
+
+//   res.json({ success: true });
+// });
+
+router.post("/mark-bounce", async (req, res) => {
+  let { emailId, recipientId } = req.body;
+
+  if (!emailId || !recipientId) {
+    return res.status(400).json({ error: "Missing emailId or recipientId" });
+  }
+
+  recipientId = recipientId.toLowerCase();
+
+  const [logResult, campaignResult] = await Promise.all([
+    Log.updateMany(
+      { recipient: recipientId }, // ✅ match on actual field
+      { $set: { bounceStatus: true } }
+    ),
+    campaignConn.collection(emailId).updateMany(
+      { recipient: recipientId }, // ✅ match on actual field
+      { $set: { bounceStatus: true } }
+    ),
   ]);
+
+  console.log(`📌 mark-bounce updated:
+    Logs: ${logResult.modifiedCount}
+    Campaign: ${campaignResult.modifiedCount}`);
 
   res.json({ success: true });
 });
+
 
 router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
   try {
@@ -528,7 +556,7 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
 
         if (emailId) {
           await axios.post(
-            `${process.env.TRACKING_URL}/api/campaign/mark-bounce`,
+            `https://truenotsendr.com/api/campaign/mark-bounce`,
             { emailId, recipientId: email }
           );
           console.log(`✅ Bounce marked for ${email} in ${emailId}`);

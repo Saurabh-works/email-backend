@@ -121,13 +121,13 @@ setInterval(() => {
   console.log("🧭 Region Stats:", regionStats);
 }, 300000); // log every 5 minutes
 
-app.use((req, res, next) => {
-  if (req.headers["x-amz-sns-message-type"]) {
-    bodyParser.text({ type: "*/*" })(req, res, next);
-  } else {
-    bodyParser.json()(req, res, next);
-  }
-});
+// app.use((req, res, next) => {
+//   if (req.headers["x-amz-sns-message-type"]) {
+//     bodyParser.text({ type: "*/*" })(req, res, next);
+//   } else {
+//     bodyParser.json()(req, res, next);
+//   }
+// });
 
 // const allowedOrigins = ["https://localhost:3000", "https://truesendr.com"];
 

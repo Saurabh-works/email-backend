@@ -569,11 +569,59 @@ router.post("/mark-bounce", async (req, res) => {
 
 
 
+// router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
+//   try {
+//     // const message =
+//     //   typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
+//     let message = req.body;
+//     if (typeof message === "string") {
+//       try {
+//         message = JSON.parse(message);
+//       } catch (err) {
+//         console.error("❌ Failed to parse incoming string body", err);
+//         return res.status(400).send("Invalid JSON");
+//       }
+//     }
+
+//     // 🔐 1. Handle SNS subscription confirmation
+//     if (message.Type === "SubscriptionConfirmation" && message.SubscribeURL) {
+//       await axios.get(message.SubscribeURL); // Auto-confirm subscription
+//       console.log("✅ SNS Subscription confirmed");
+//       return res.status(200).send("Subscription confirmed");
+//     }
+
+//     // 📩 2. Handle actual bounce notifications
+//     if (message.Type === "Notification") {
+//       const payload = JSON.parse(message.Message);
+//       console.log(
+//         "📩 Full SES bounce payload:",
+//         JSON.stringify(payload, null, 2)
+//       );
+
+//       if (payload.notificationType === "Bounce") {
+//         const email = payload.mail.destination[0];
+//         const emailId = payload.mail.tags?.campaign?.[0];
+
+//         if (emailId) {
+//           await axios.post(
+//             `https://truenotsendr.com/api/campaign/mark-bounce`,
+//             { emailId, recipientId: email }
+//           );
+//           console.log(`✅ Bounce marked for ${email} in ${emailId}`);
+//         }
+//       }
+//     }
+
+//     res.status(200).send("OK");
+//   } catch (err) {
+//     console.error("❌ /ses-webhook error:", err.message);
+//     res.status(500).send("Webhook processing failed");
+//   }
+// });
+
 router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
   try {
-    // const message =
-    //   typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
     let message = req.body;
     if (typeof message === "string") {
       try {
@@ -584,31 +632,37 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
       }
     }
 
-    // 🔐 1. Handle SNS subscription confirmation
+    // Handle SNS subscription confirmation
     if (message.Type === "SubscriptionConfirmation" && message.SubscribeURL) {
       await axios.get(message.SubscribeURL); // Auto-confirm subscription
       console.log("✅ SNS Subscription confirmed");
       return res.status(200).send("Subscription confirmed");
     }
 
-    // 📩 2. Handle actual bounce notifications
+    // Handle bounce or delivery notifications
     if (message.Type === "Notification") {
       const payload = JSON.parse(message.Message);
-      console.log(
-        "📩 Full SES bounce payload:",
-        JSON.stringify(payload, null, 2)
-      );
+      console.log("📩 Full SES payload:", JSON.stringify(payload, null, 2));
 
       if (payload.notificationType === "Bounce") {
-        const email = payload.mail.destination[0];
-        const emailId = payload.mail.tags?.campaign?.[0];
+        // Defensive extraction of emailId and recipient
+        const bouncedRecipient = payload.bounce.bouncedRecipients?.[0]?.emailAddress;
+        const emailId = payload.mail.tags?.campaign?.[0]; // might be undefined
+        const messageId = payload.mail.messageId; // fallback identifier
 
         if (emailId) {
+          // If emailId available, mark bounce in DB
           await axios.post(
             `https://truenotsendr.com/api/campaign/mark-bounce`,
-            { emailId, recipientId: email }
+            { emailId, recipientId: bouncedRecipient }
           );
-          console.log(`✅ Bounce marked for ${email} in ${emailId}`);
+          console.log(`✅ Bounce marked for ${bouncedRecipient} in campaign ${emailId}`);
+        } else {
+          // emailId missing - log and optionally store for manual review or future processing
+          console.warn(`⚠️ Bounce received for ${bouncedRecipient} but emailId (campaign) missing. MessageId: ${messageId}`);
+
+          // Optional: You can store this bounce info somewhere for manual handling or later mapping
+          // e.g. save in a DB collection for bounces without campaign info
         }
       }
     }
@@ -619,6 +673,7 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
     res.status(500).send("Webhook processing failed");
   }
 });
+
 
 router.get("/campaign-analytics", async (req, res) => {
   const { emailId } = req.query;

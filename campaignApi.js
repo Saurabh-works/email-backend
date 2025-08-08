@@ -503,11 +503,11 @@ router.post("/mark-bounce", async (req, res) => {
 
   const [logResult, campaignResult] = await Promise.all([
     Log.updateMany(
-      { recipient: recipientId }, // ✅ match on actual field
+      { recipientId: recipientId }, // ✅ match correct field name
       { $set: { bounceStatus: true } }
     ),
     campaignConn.collection(emailId).updateMany(
-      { recipient: recipientId }, // ✅ match on actual field
+      { recipientId: recipientId }, // ✅ match correct field name
       { $set: { bounceStatus: true } }
     ),
   ]);
@@ -518,6 +518,7 @@ router.post("/mark-bounce", async (req, res) => {
 
   res.json({ success: true });
 });
+
 
 
 router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {

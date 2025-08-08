@@ -78,10 +78,10 @@ app.set('trust proxy', true); // ✅ Add this line it should forward the origina
 //   next();
 // });
 
-app.use((req, res, next) => {
-  console.log("Full Headers:", req.headers);
-  next();
-});
+// app.use((req, res, next) => {
+//   console.log("Full Headers:", req.headers);
+//   next();
+// });
 
 // app.set('trust proxy', (ip) => {
 //   console.log("Incoming request from IP:", ip);

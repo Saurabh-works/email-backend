@@ -499,15 +499,13 @@ router.post("/mark-bounce", async (req, res) => {
     return res.status(400).json({ error: "Missing emailId or recipientId" });
   }
 
-  recipientId = recipientId.toLowerCase();
-
   const [logResult, campaignResult] = await Promise.all([
     Log.updateMany(
-      { recipientId: recipientId }, // ✅ match correct field name
+      { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
       { $set: { bounceStatus: true } }
     ),
     campaignConn.collection(emailId).updateMany(
-      { recipientId: recipientId }, // ✅ match correct field name
+      { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
       { $set: { bounceStatus: true } }
     ),
   ]);

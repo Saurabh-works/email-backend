@@ -7,7 +7,7 @@ const requestIp = require("request-ip");
 const uaParser = require("ua-parser-js");
 const axios = require("axios");
 const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
-const { validateSMTP } = require("./smtpValidator"); 
+const { validateSMTP } = require("./smtpValidator");
 const juice = require("juice");
 
 const router = express.Router();
@@ -54,7 +54,6 @@ const sesClient = new SESClient({
 //   );
 // }
 
-
 // function getRealIp(req) {
 //   // ✅ Netlify-specific header (most reliable when coming via Netlify frontend)
 //   if (req.headers['x-nf-client-connection-ip']) {
@@ -81,11 +80,6 @@ function getRealIp(req) {
     req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || ""
   );
 }
-
-
-
-
-
 
 const isBot = (ua) => /bot|crawler|preview|headless/i.test(ua);
 
@@ -162,7 +156,6 @@ router.get("/track-click", async (req, res) => {
   await logEvent(req, "click");
   res.redirect("https://demandmediabpm.com/");
 });
-
 
 // router.post("/send-campaign", async (req, res) => {
 //   const { emailId, subject, body, style, listName } = req.body;
@@ -343,7 +336,6 @@ router.get("/track-click", async (req, res) => {
 //   }
 // });
 
-
 router.post("/send-campaign", async (req, res) => {
   const { emailId, subject, body, style, listName } = req.body;
   if (!emailId || !subject || !body || !listName)
@@ -485,7 +477,6 @@ router.post("/send-campaign", async (req, res) => {
   }
 });
 
-
 router.post("/mark-bounce", async (req, res) => {
   const { emailId, recipientId } = req.body;
   if (!emailId || !recipientId)
@@ -503,8 +494,18 @@ router.post("/mark-bounce", async (req, res) => {
 
 router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
   try {
-    const message =
-      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    // const message =
+    //   typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
+    let message = req.body;
+    if (typeof message === "string") {
+      try {
+        message = JSON.parse(message);
+      } catch (err) {
+        console.error("❌ Failed to parse incoming string body", err);
+        return res.status(400).send("Invalid JSON");
+      }
+    }
 
     // 🔐 1. Handle SNS subscription confirmation
     if (message.Type === "SubscriptionConfirmation" && message.SubscribeURL) {
@@ -516,6 +517,10 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
     // 📩 2. Handle actual bounce notifications
     if (message.Type === "Notification") {
       const payload = JSON.parse(message.Message);
+      console.log(
+        "📩 Full SES bounce payload:",
+        JSON.stringify(payload, null, 2)
+      );
 
       if (payload.notificationType === "Bounce") {
         const email = payload.mail.destination[0];
@@ -585,7 +590,6 @@ router.get("/campaign-analytics", async (req, res) => {
   });
 });
 
-
 router.get("/campaign-details", async (req, res) => {
   const { emailId } = req.query;
   const CampaignModel = campaignConn.model(emailId, logSchema, emailId);
@@ -637,7 +641,10 @@ router.get("/campaign-ids", async (_, res) => {
   const collections = await campaignConn.db.listCollections().toArray();
   const ids = collections
     .map((c) => c.name)
-    .filter((name) => name.toLowerCase() !== "logs" && name.toLowerCase() !== "campaign");
+    .filter(
+      (name) =>
+        name.toLowerCase() !== "logs" && name.toLowerCase() !== "campaign"
+    );
   res.json(ids);
 });
 
@@ -777,7 +784,6 @@ router.get("/campaign-csv", async (req, res) => {
   }
 });
 
-
 // router.get('/myip', (req, res) => {
 //   res.send({
 //     ip: req.ip,
@@ -786,14 +792,15 @@ router.get("/campaign-csv", async (req, res) => {
 //   });
 // });
 
-router.get('/myip', (req, res) => {
-  const realIp = req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.ip;
+router.get("/myip", (req, res) => {
+  const realIp =
+    req.headers["x-real-ip"] || req.headers["x-forwarded-for"] || req.ip;
   res.json({
     realIp,
     req_ip: req.ip,
     remoteAddress: req.connection?.remoteAddress,
     socketAddress: req.socket?.remoteAddress,
-    headers: req.headers
+    headers: req.headers,
   });
 });
 
@@ -809,11 +816,5 @@ router.get('/myip', (req, res) => {
 //     headers: req.headers
 //   });
 // });
-
-
-
-
-
-
 
 module.exports = router;

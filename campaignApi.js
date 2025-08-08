@@ -465,8 +465,21 @@ router.post("/send-campaign", async (req, res) => {
       };
 
       try {
-        await sesClient.send(new SendEmailCommand(params));
-        console.log(`✅ Email sent to ${to}`);
+        // await sesClient.send(new SendEmailCommand(params));
+        // console.log(`✅ Email sent to ${to}`);
+
+        const sendResult = await sesClient.send(new SendEmailCommand(params));
+        const messageId = sendResult.MessageId;
+
+        console.log(`✅ Email sent to ${to} with MessageId ${messageId}`);
+
+        // Save MessageId mapping in DB
+        await campaignConn.collection("MessageIdMap").insertOne({
+          messageId,
+          emailId,
+          recipientId: to,
+          timestamp: new Date(),
+        });
       } catch (err) {
         console.error(`❌ Failed to send to ${to}:`, err.message);
       }
@@ -530,18 +543,22 @@ router.post("/mark-bounce", async (req, res) => {
   }
 
   try {
-    console.log(`Mark bounce requested for emailId='${emailId}', recipientId='${recipientId}'`);
+    console.log(
+      `Mark bounce requested for emailId='${emailId}', recipientId='${recipientId}'`
+    );
 
     const collections = await campaignConn.listCollections().toArray();
-    if (!collections.some(c => c.name === emailId)) {
+    if (!collections.some((c) => c.name === emailId)) {
       console.warn(`Collection ${emailId} does NOT exist`);
     }
 
     const docBefore = await campaignConn.collection(emailId).findOne({
-      recipientId: { $regex: `^${recipientId}$`, $options: "i" }
+      recipientId: { $regex: `^${recipientId}$`, $options: "i" },
     });
     if (!docBefore) {
-      console.warn(`No matching document found in ${emailId} for recipientId ${recipientId}`);
+      console.warn(
+        `No matching document found in ${emailId} for recipientId ${recipientId}`
+      );
     }
 
     const [logResult, campaignResult] = await Promise.all([
@@ -549,10 +566,12 @@ router.post("/mark-bounce", async (req, res) => {
         { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
         { $set: { bounceStatus: true } }
       ),
-      campaignConn.collection(emailId).updateMany(
-        { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
-        { $set: { bounceStatus: true } }
-      ),
+      campaignConn
+        .collection(emailId)
+        .updateMany(
+          { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
+          { $set: { bounceStatus: true } }
+        ),
     ]);
 
     console.log(`Updated bounceStatus:
@@ -565,9 +584,6 @@ router.post("/mark-bounce", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
-
-
 
 // router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
 //   try {
@@ -646,23 +662,53 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
 
       if (payload.notificationType === "Bounce") {
         // Defensive extraction of emailId and recipient
-        const bouncedRecipient = payload.bounce.bouncedRecipients?.[0]?.emailAddress;
-        const emailId = payload.mail.tags?.campaign?.[0]; // might be undefined
-        const messageId = payload.mail.messageId; // fallback identifier
+        // const bouncedRecipient = payload.bounce.bouncedRecipients?.[0]?.emailAddress;
+        // const emailId = payload.mail.tags?.campaign?.[0]; // might be undefined
+        // const messageId = payload.mail.messageId; // fallback identifier
+
+        // if (emailId) {
+        //   // If emailId available, mark bounce in DB
+        //   await axios.post(
+        //     `https://truenotsendr.com/api/campaign/mark-bounce`,
+        //     { emailId, recipientId: bouncedRecipient }
+        //   );
+        //   console.log(`✅ Bounce marked for ${bouncedRecipient} in campaign ${emailId}`);
+        // } else {
+        //   // emailId missing - log and optionally store for manual review or future processing
+        //   console.warn(`⚠️ Bounce received for ${bouncedRecipient} but emailId (campaign) missing. MessageId: ${messageId}`);
+
+        //   // Optional: You can store this bounce info somewhere for manual handling or later mapping
+        //   // e.g. save in a DB collection for bounces without campaign info
+        // }
+
+        const bouncedRecipient =
+          payload.bounce.bouncedRecipients?.[0]?.emailAddress;
+        let emailId = payload.mail.tags?.campaign?.[0]; // might be undefined
+        const messageId = payload.mail.messageId;
+
+        if (!emailId) {
+          // Lookup emailId from your MessageIdMap collection
+          const mapping = await campaignConn
+            .collection("MessageIdMap")
+            .findOne({ messageId });
+          if (mapping) {
+            emailId = mapping.emailId;
+          }
+        }
 
         if (emailId) {
-          // If emailId available, mark bounce in DB
+          // Mark bounce in DB
           await axios.post(
             `https://truenotsendr.com/api/campaign/mark-bounce`,
             { emailId, recipientId: bouncedRecipient }
           );
-          console.log(`✅ Bounce marked for ${bouncedRecipient} in campaign ${emailId}`);
+          console.log(
+            `✅ Bounce marked for ${bouncedRecipient} in campaign ${emailId}`
+          );
         } else {
-          // emailId missing - log and optionally store for manual review or future processing
-          console.warn(`⚠️ Bounce received for ${bouncedRecipient} but emailId (campaign) missing. MessageId: ${messageId}`);
-
-          // Optional: You can store this bounce info somewhere for manual handling or later mapping
-          // e.g. save in a DB collection for bounces without campaign info
+          console.warn(
+            `⚠️ Bounce received for ${bouncedRecipient} but emailId (campaign) missing. MessageId: ${messageId}`
+          );
         }
       }
     }
@@ -673,7 +719,6 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
     res.status(500).send("Webhook processing failed");
   }
 });
-
 
 router.get("/campaign-analytics", async (req, res) => {
   const { emailId } = req.query;

@@ -480,6 +480,28 @@ router.post("/send-campaign", async (req, res) => {
           recipientId: to,
           timestamp: new Date(),
         });
+
+        // --- New: Async validateSMTP check ---
+        validateSMTP(to)
+          .then(async (isBounce) => {
+            if (isBounce) {
+              console.log(`⚠️ Marking bounce for ${to} after SMTP validation`);
+              // Update bounceStatus true in logs and campaign collection
+              await Log.updateMany(
+                { emailId, recipientId: to },
+                { $set: { bounceStatus: true } }
+              );
+              await campaignConn
+                .collection(emailId)
+                .updateMany(
+                  { recipientId: to },
+                  { $set: { bounceStatus: true } }
+                );
+            }
+          })
+          .catch((err) => {
+            console.error(`SMTP validation error for ${to}:`, err.message);
+          });
       } catch (err) {
         console.error(`❌ Failed to send to ${to}:`, err.message);
       }
@@ -534,7 +556,6 @@ router.post("/send-campaign", async (req, res) => {
 //     res.status(500).json({ error: "Internal server error" });
 //   }
 // });
-
 
 router.post("/mark-bounce", async (req, res) => {
   let { emailId, recipientId } = req.body;
@@ -592,7 +613,6 @@ router.post("/mark-bounce", async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
-
 
 // router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
 //   try {

@@ -492,6 +492,36 @@ router.post("/send-campaign", async (req, res) => {
 //   res.json({ success: true });
 // });
 
+// router.post("/mark-bounce", async (req, res) => {
+//   let { emailId, recipientId } = req.body;
+
+//   if (!emailId || !recipientId) {
+//     return res.status(400).json({ error: "Missing emailId or recipientId" });
+//   }
+
+//   try {
+//     const [logResult, campaignResult] = await Promise.all([
+//       Log.updateMany(
+//         { recipientId: { $regex: `^${recipientId}$`, $options: "i" } }, // match ignoring case
+//         { $set: { bounceStatus: true } }
+//       ),
+//       campaignConn.collection(emailId).updateMany(
+//         { recipientId: { $regex: `^${recipientId}$`, $options: "i" } }, // match ignoring case
+//         { $set: { bounceStatus: true } }
+//       ),
+//     ]);
+
+//     console.log(`📌 mark-bounce updated:
+//       Logs: ${logResult.modifiedCount}
+//       Campaign: ${campaignResult.modifiedCount}`);
+
+//     res.json({ success: true });
+//   } catch (error) {
+//     console.error("❌ mark-bounce error:", error);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+
 router.post("/mark-bounce", async (req, res) => {
   let { emailId, recipientId } = req.body;
 
@@ -500,24 +530,38 @@ router.post("/mark-bounce", async (req, res) => {
   }
 
   try {
+    console.log(`Mark bounce requested for emailId='${emailId}', recipientId='${recipientId}'`);
+
+    const collections = await campaignConn.listCollections().toArray();
+    if (!collections.some(c => c.name === emailId)) {
+      console.warn(`Collection ${emailId} does NOT exist`);
+    }
+
+    const docBefore = await campaignConn.collection(emailId).findOne({
+      recipientId: { $regex: `^${recipientId}$`, $options: "i" }
+    });
+    if (!docBefore) {
+      console.warn(`No matching document found in ${emailId} for recipientId ${recipientId}`);
+    }
+
     const [logResult, campaignResult] = await Promise.all([
       Log.updateMany(
-        { recipientId: { $regex: `^${recipientId}$`, $options: "i" } }, // match ignoring case
+        { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
         { $set: { bounceStatus: true } }
       ),
       campaignConn.collection(emailId).updateMany(
-        { recipientId: { $regex: `^${recipientId}$`, $options: "i" } }, // match ignoring case
+        { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
         { $set: { bounceStatus: true } }
       ),
     ]);
 
-    console.log(`📌 mark-bounce updated:
+    console.log(`Updated bounceStatus:
       Logs: ${logResult.modifiedCount}
       Campaign: ${campaignResult.modifiedCount}`);
 
     res.json({ success: true });
   } catch (error) {
-    console.error("❌ mark-bounce error:", error);
+    console.error("mark-bounce error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -501,7 +501,7 @@ router.post("/mark-bounce", async (req, res) => {
   res.json({ success: true });
 });
 
-router.post("/ses-webhook", async (req, res) => {
+router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
   try {
     const message =
       typeof req.body === "string" ? JSON.parse(req.body) : req.body;

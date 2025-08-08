@@ -499,23 +499,29 @@ router.post("/mark-bounce", async (req, res) => {
     return res.status(400).json({ error: "Missing emailId or recipientId" });
   }
 
-  const [logResult, campaignResult] = await Promise.all([
-    Log.updateMany(
-      { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
-      { $set: { bounceStatus: true } }
-    ),
-    campaignConn.collection(emailId).updateMany(
-      { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
-      { $set: { bounceStatus: true } }
-    ),
-  ]);
+  try {
+    const [logResult, campaignResult] = await Promise.all([
+      Log.updateMany(
+        { recipientId: { $regex: `^${recipientId}$`, $options: "i" } }, // match ignoring case
+        { $set: { bounceStatus: true } }
+      ),
+      campaignConn.collection(emailId).updateMany(
+        { recipientId: { $regex: `^${recipientId}$`, $options: "i" } }, // match ignoring case
+        { $set: { bounceStatus: true } }
+      ),
+    ]);
 
-  console.log(`📌 mark-bounce updated:
-    Logs: ${logResult.modifiedCount}
-    Campaign: ${campaignResult.modifiedCount}`);
+    console.log(`📌 mark-bounce updated:
+      Logs: ${logResult.modifiedCount}
+      Campaign: ${campaignResult.modifiedCount}`);
 
-  res.json({ success: true });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ mark-bounce error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
+
 
 
 

@@ -535,6 +535,7 @@ router.post("/send-campaign", async (req, res) => {
 //   }
 // });
 
+
 router.post("/mark-bounce", async (req, res) => {
   let { emailId, recipientId } = req.body;
 
@@ -547,11 +548,15 @@ router.post("/mark-bounce", async (req, res) => {
       `Mark bounce requested for emailId='${emailId}', recipientId='${recipientId}'`
     );
 
-    const collections = await campaignConn.listCollections().toArray();
+    // Check if the campaign collection exists
+    const collections = await campaignConn.db.listCollections().toArray();
     if (!collections.some((c) => c.name === emailId)) {
       console.warn(`Collection ${emailId} does NOT exist`);
+      // Optionally: return here if you want strict check
+      // return res.status(404).json({ error: "Campaign collection not found" });
     }
 
+    // Check if recipient exists in campaign collection (case insensitive)
     const docBefore = await campaignConn.collection(emailId).findOne({
       recipientId: { $regex: `^${recipientId}$`, $options: "i" },
     });
@@ -559,31 +564,35 @@ router.post("/mark-bounce", async (req, res) => {
       console.warn(
         `No matching document found in ${emailId} for recipientId ${recipientId}`
       );
+      // Optional: return here if you want strict check
+      // return res.status(404).json({ error: "Recipient not found in campaign" });
     }
 
-    const [logResult, campaignResult] = await Promise.all([
-      Log.updateMany(
+    // Update bounceStatus=true in the general Log collection for this recipient
+    const logResult = await Log.updateMany(
+      { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
+      { $set: { bounceStatus: true } }
+    );
+
+    // Update bounceStatus=true in the campaign-specific collection
+    const campaignResult = await campaignConn
+      .collection(emailId)
+      .updateMany(
         { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
         { $set: { bounceStatus: true } }
-      ),
-      campaignConn
-        .collection(emailId)
-        .updateMany(
-          { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
-          { $set: { bounceStatus: true } }
-        ),
-    ]);
+      );
 
     console.log(`Updated bounceStatus:
       Logs: ${logResult.modifiedCount}
       Campaign: ${campaignResult.modifiedCount}`);
 
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (error) {
     console.error("mark-bounce error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 // router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
 //   try {

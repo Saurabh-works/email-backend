@@ -98,6 +98,11 @@ async function logEvent(req, type) {
     },
   };
 
+  // 🛑 Prevent accidental bounceStatus overwrite on open/click/unsubscribe
+  if (type !== "sent") {
+    delete updateData.$set.bounceStatus;
+  }
+
   await Log.findOneAndUpdate({ emailId, recipientId, type }, updateData, {
     upsert: true,
   });
@@ -307,19 +312,45 @@ router.post("/send-campaign", async (req, res) => {
     setTimeout(async () => {
       try {
         // Only mark as Yes if still NA AND no "open" or "click" events
+        // await Promise.all([
+        //   Log.updateMany(
+        //     {
+        //       emailId,
+        //       bounceStatus: "NA",
+        //       type: "sent", // only sent entries
+        //     },
+        //     { $set: { bounceStatus: "Yes" } }
+        //   ),
+        //   campaignConn.collection(emailId).updateMany(
+        //     {
+        //       bounceStatus: "NA",
+        //       type: "sent", // only sent entries
+        //     },
+        //     { $set: { bounceStatus: "Yes" } }
+        //   ),
+        // ]);
+
+        // Get list of recipients who have interacted
+        const interactedRecipients = await Log.distinct("recipientId", {
+          emailId,
+          type: { $in: ["open", "click", "unsubscribe"] },
+        });
+
         await Promise.all([
           Log.updateMany(
             {
               emailId,
               bounceStatus: "NA",
-              type: "sent", // only sent entries
+              type: "sent",
+              recipientId: { $nin: interactedRecipients },
             },
             { $set: { bounceStatus: "Yes" } }
           ),
           campaignConn.collection(emailId).updateMany(
             {
               bounceStatus: "NA",
-              type: "sent", // only sent entries
+              type: "sent",
+              recipientId: { $nin: interactedRecipients },
             },
             { $set: { bounceStatus: "Yes" } }
           ),
@@ -527,7 +558,9 @@ router.get("/campaign-analytics", async (req, res) => {
 
   const campaignCollection = campaignConn.collection(emailId);
   // const recipients = await campaignCollection.distinct("recipientId");
-  const resolvedRecipients = await campaignCollection.distinct("recipientId", { bounceStatus: { $in: ["Yes", "No"] } });
+  const resolvedRecipients = await campaignCollection.distinct("recipientId", {
+    bounceStatus: { $in: ["Yes", "No"] },
+  });
 
   // const bounces = await campaignCollection
   //   .find({ bounceStatus: true })
@@ -579,6 +612,12 @@ router.get("/campaign-details", async (req, res) => {
   const logs = await CampaignModel.find();
 
   const details = {};
+  // Get authoritative bounce status per recipient from "sent" logs
+  const sentStatuses = {};
+  for (const sentLog of logs.filter((l) => l.type === "sent")) {
+    sentStatuses[sentLog.recipientId] = sentLog.bounceStatus;
+  }
+
   for (const log of logs) {
     const r = log.recipientId;
     if (!details[r]) {
@@ -618,12 +657,13 @@ router.get("/campaign-details", async (req, res) => {
     // if (log.bounceStatus) details[r].bounceStatus = true;
     // if (log.bounceStatus === "Yes") details[r].bounceStatus = true;
     // details[r].bounceStatus = log.bounceStatus || "NA";
-    if (log.bounceStatus === "Yes") {
-      details[r].bounceStatus = true; // ✅ True for Yes
-    } else if (log.bounceStatus === "No") {
-      details[r].bounceStatus = false; // ❌ False for No
+    const status = sentStatuses[r] || "NA";
+    if (status === "Yes") {
+      details[r].bounceStatus = true;
+    } else if (status === "No") {
+      details[r].bounceStatus = false;
     } else {
-      details[r].bounceStatus = "NA"; // Show NA explicitly
+      details[r].bounceStatus = "NA";
     }
   }
   res.json(Object.values(details));

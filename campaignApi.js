@@ -481,27 +481,32 @@ router.post("/send-campaign", async (req, res) => {
           timestamp: new Date(),
         });
 
+
+        //.........this code i add in friday means saturday morning.
         // --- New: Async validateSMTP check ---
-        validateSMTP(to)
-          .then(async (isBounce) => {
-            if (isBounce) {
-              console.log(`⚠️ Marking bounce for ${to} after SMTP validation`);
-              // Update bounceStatus true in logs and campaign collection
-              await Log.updateMany(
-                { emailId, recipientId: to },
-                { $set: { bounceStatus: true } }
-              );
-              await campaignConn
-                .collection(emailId)
-                .updateMany(
-                  { recipientId: to },
-                  { $set: { bounceStatus: true } }
-                );
-            }
-          })
-          .catch((err) => {
-            console.error(`SMTP validation error for ${to}:`, err.message);
-          });
+        // validateSMTP(to)
+        //   .then(async (isBounce) => {
+        //     if (isBounce) {
+        //       console.log(`⚠️ Marking bounce for ${to} after SMTP validation`);
+        //       // Update bounceStatus true in logs and campaign collection
+        //       await Log.updateMany(
+        //         { emailId, recipientId: to },
+        //         { $set: { bounceStatus: true } }
+        //       );
+        //       await campaignConn
+        //         .collection(emailId)
+        //         .updateMany(
+        //           { recipientId: to },
+        //           { $set: { bounceStatus: true } }
+        //         );
+        //     }
+        //   })
+        //   .catch((err) => {
+        //     console.error(`SMTP validation error for ${to}:`, err.message);
+        //   });
+          // till here
+
+
       } catch (err) {
         console.error(`❌ Failed to send to ${to}:`, err.message);
       }

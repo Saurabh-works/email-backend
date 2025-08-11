@@ -149,6 +149,7 @@ router.post("/send-campaign", async (req, res) => {
       totalOpened: Number,
       totalClicked: Number,
       totalUnsubscribed: Number,
+      status: String,
       createdAt: Date,
     },
     { strict: false }
@@ -165,7 +166,11 @@ router.post("/send-campaign", async (req, res) => {
     if (!recipients.length)
       return res.status(404).json({ error: "No recipients found" });
 
-    campaignProgress[emailId] = { sent: 0, total: recipients.length };
+    campaignProgress[emailId] = {
+      sent: 0,
+      total: recipients.length,
+      status: "pending",
+    };
 
     const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
     await Campaign.create({
@@ -176,6 +181,7 @@ router.post("/send-campaign", async (req, res) => {
       totalOpened: 0,
       totalClicked: 0,
       totalUnsubscribed: 0,
+      status: "pending",
       createdAt: new Date(),
     });
 
@@ -308,11 +314,16 @@ router.post("/send-campaign", async (req, res) => {
         //   });
         // till here
         campaignProgress[emailId].sent += 1;
+        await Campaign.updateOne(
+          { emailId },
+          { $set: { sentCount: campaignProgress[emailId].sent } }
+        );
       } catch (err) {
         console.error(`❌ Failed to send to ${to}:`, err.message);
       }
     }
-    campaignProgress[emailId].sent = campaignProgress[emailId].total;
+    campaignProgress[emailId].status = "completed";
+    await Campaign.updateOne({ emailId }, { $set: { status: "completed" } });
     // Auto-mark remaining NA as Yes after 2 minutes
     // Auto-mark remaining NA as Yes after 2 minutes (only if no delivery/open/click)
     setTimeout(async () => {
@@ -377,23 +388,37 @@ router.post("/send-campaign", async (req, res) => {
 // const progressMap = {}; // { emailId: { sent: 0, total: 0 } }
 
 // New route for SSE
-router.get("/send-campaign-progress", (req, res) => {
+router.get("/send-campaign-progress", async (req, res) => {
   const { emailId } = req.query;
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.flushHeaders();
 
-  const sendProgress = () => {
-    if (campaignProgress[emailId]) {
-      res.write(`data: ${JSON.stringify(campaignProgress[emailId])}\n\n`);
+  const sendProgress = async () => {
+    let progress = campaignProgress[emailId];
+    if (!progress) {
+      // Fallback to DB
+      const Campaign = campaignConn.model(
+        "Campaign",
+        new mongoose.Schema({}, { strict: false }),
+        "Campaign"
+      );
+      const campaignDoc = await Campaign.findOne({ emailId });
+      if (campaignDoc) {
+        progress = {
+          sent: campaignDoc.sentCount || 0,
+          total: campaignDoc.totalSent || 0,
+          status: campaignDoc.status || "pending",
+        };
+      }
+    }
+    if (progress) {
+      res.write(`data: ${JSON.stringify(progress)}\n\n`);
     }
   };
 
   const interval = setInterval(sendProgress, 1000);
-
-  req.on("close", () => {
-    clearInterval(interval);
-  });
+  req.on("close", () => clearInterval(interval));
 });
 
 router.post("/mark-bounce", async (req, res) => {
@@ -704,7 +729,9 @@ router.get("/campaign-ids", async (_, res) => {
     .map((c) => c.name)
     .filter(
       (name) =>
-        name.toLowerCase() !== "logs" && name.toLowerCase() !== "campaign"
+        name.toLowerCase() !== "logs" &&
+        name.toLowerCase() !== "campaign" &&
+        name.toLowerCase() !== "MessageIdMap"
     );
   res.json(ids);
 });

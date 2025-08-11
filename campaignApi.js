@@ -128,15 +128,23 @@ router.get("/track-pixel", async (req, res) => {
   res.end(pixel);
 });
 
+// router.get("/track-click", async (req, res) => {
+//   await logEvent(req, "click");
+//   res.redirect("https://demandmediabpm.com/");
+// });
+
 router.get("/track-click", async (req, res) => {
   await logEvent(req, "click");
-  res.redirect("https://demandmediabpm.com/");
+
+  const target = req.query.redirect || "https://demandmediabpm.com/";
+  res.redirect(target);
 });
+
 
 const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 
 router.post("/send-campaign", async (req, res) => {
-  const { emailId, subject, body, style, listName } = req.body;
+  const { emailId, subject, body, style, listName, redirectUrl } = req.body;
   if (!emailId || !subject || !body || !listName)
     return res.status(400).json({ error: "Missing fields" });
 
@@ -176,6 +184,7 @@ router.post("/send-campaign", async (req, res) => {
     await Campaign.create({
       emailId,
       subject,
+      redirectUrl,
       totalSent: recipients.length,
       totalBounced: 0,
       totalOpened: 0,
@@ -235,7 +244,7 @@ router.post("/send-campaign", async (req, res) => {
       )}&recipientId=${encodeURIComponent(to)}&t=${Date.now()}`;
       const clickUrl = `https://truenotsendr.com/api/campaign/track-click?emailId=${encodeURIComponent(
         emailId
-      )}&recipientId=${encodeURIComponent(to)}`;
+      )}&recipientId=${encodeURIComponent(to)}&redirect=${encodeURIComponent(redirectUrl)}`;
       const unsubscribeUrl = `https://truenotsendr.com/api/campaign/track-unsubscribe?emailId=${encodeURIComponent(
         emailId
       )}&recipientId=${encodeURIComponent(to)}`;

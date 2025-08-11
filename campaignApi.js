@@ -688,9 +688,9 @@ router.get("/campaign-details", async (req, res) => {
     // details[r].bounceStatus = log.bounceStatus || "NA";
     const status = sentStatuses[r] || "NA";
     if (status === "Yes") {
-      details[r].bounceStatus = true;
+      details[r].bounceStatus = "Yes";
     } else if (status === "No") {
-      details[r].bounceStatus = false;
+      details[r].bounceStatus = "No";
     } else {
       details[r].bounceStatus = "NA";
     }

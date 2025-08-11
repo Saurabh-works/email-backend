@@ -7,7 +7,7 @@ const requestIp = require("request-ip");
 const uaParser = require("ua-parser-js");
 const axios = require("axios");
 const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
-const { validateSMTP } = require("./smtpValidator");
+// const { validateSMTP } = require("./smtpValidator");
 const juice = require("juice");
 
 const router = express.Router();
@@ -303,25 +303,33 @@ router.post("/send-campaign", async (req, res) => {
       }
     }
     // Auto-mark remaining NA as Yes after 2 minutes
+    // Auto-mark remaining NA as Yes after 2 minutes (only if no delivery/open/click)
     setTimeout(async () => {
       try {
+        // Only mark as Yes if still NA AND no "open" or "click" events
         await Promise.all([
           Log.updateMany(
-            { emailId, bounceStatus: "NA" },
+            {
+              emailId,
+              bounceStatus: "NA",
+              type: "sent", // only sent entries
+            },
             { $set: { bounceStatus: "Yes" } }
           ),
-          campaignConn
-            .collection(emailId)
-            .updateMany(
-              { bounceStatus: "NA" },
-              { $set: { bounceStatus: "Yes" } }
-            ),
+          campaignConn.collection(emailId).updateMany(
+            {
+              bounceStatus: "NA",
+              type: "sent", // only sent entries
+            },
+            { $set: { bounceStatus: "Yes" } }
+          ),
         ]);
+
         console.log(`✅ Auto-marked NA → Yes for campaign ${emailId}`);
       } catch (err) {
         console.error(`❌ Auto-mark NA → Yes failed for ${emailId}`, err);
       }
-    }, 2 * 60 * 1000); // 2 minutes till here
+    }, 30000);
   } catch (err) {
     console.error("❌ /send-campaign error:", err);
     res.status(500).json({ error: "Failed to send campaign" });
@@ -518,21 +526,27 @@ router.get("/campaign-analytics", async (req, res) => {
   ]);
 
   const campaignCollection = campaignConn.collection(emailId);
-  const recipients = await campaignCollection.distinct("recipientId");
+  // const recipients = await campaignCollection.distinct("recipientId");
+  const resolvedRecipients = await campaignCollection.distinct("recipientId", { bounceStatus: { $in: ["Yes", "No"] } });
+
   // const bounces = await campaignCollection
   //   .find({ bounceStatus: true })
   //   .toArray();
 
-  const bounces = await campaignCollection
-    .find({ bounceStatus: "Yes" })
-    .toArray();
+  // const bounces = await campaignCollection
+  //   .find({ bounceStatus: "Yes" })
+  //   .toArray();
+  const bounces = await campaignCollection.distinct("recipientId", {
+    bounceStatus: "Yes",
+  });
 
   const unsubscribeCount = unsubscribes.length;
   const uniqueOpens = opens.length;
   const totalOpens = opens.reduce((sum, o) => sum + o.count, 0);
   const uniqueClicks = clicks.length;
   const totalClicks = clicks.reduce((sum, c) => sum + c.count, 0);
-  const totalSent = recipients.length;
+  // const totalSent = recipients.length;
+  const totalSent = resolvedRecipients.length;
   const openRate = totalSent ? (uniqueOpens / totalSent) * 100 : 0;
   const clickRate = totalSent ? (uniqueClicks / totalSent) * 100 : 0;
   const bounceRate = totalSent ? (bounces.length / totalSent) * 100 : 0;
@@ -602,7 +616,15 @@ router.get("/campaign-details", async (req, res) => {
     }
 
     // if (log.bounceStatus) details[r].bounceStatus = true;
-    if (log.bounceStatus === "Yes") details[r].bounceStatus = true;
+    // if (log.bounceStatus === "Yes") details[r].bounceStatus = true;
+    // details[r].bounceStatus = log.bounceStatus || "NA";
+    if (log.bounceStatus === "Yes") {
+      details[r].bounceStatus = true; // ✅ True for Yes
+    } else if (log.bounceStatus === "No") {
+      details[r].bounceStatus = false; // ❌ False for No
+    } else {
+      details[r].bounceStatus = "NA"; // Show NA explicitly
+    }
   }
   res.json(Object.values(details));
 });
@@ -741,8 +763,16 @@ router.get("/campaign-csv", async (req, res) => {
       //   details[r].Bounced = "Yes";
       // }
 
+      // if (log.bounceStatus === "Yes") {
+      //   details[r].Bounced = "Yes";
+      // }
+
       if (log.bounceStatus === "Yes") {
         details[r].Bounced = "Yes";
+      } else if (log.bounceStatus === "No") {
+        details[r].Bounced = "No";
+      } else {
+        details[r].Bounced = "NA";
       }
     }
 

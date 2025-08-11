@@ -29,7 +29,8 @@ const logSchema = new mongoose.Schema({
   device: String,
   browser: String,
   os: String,
-  bounceStatus: { type: Boolean, default: false },
+  // bounceStatus: { type: Boolean, default: false },
+  bounceStatus: { type: String, enum: ["NA", "Yes", "No"], default: "NA" },
 });
 logSchema.index({ emailId: 1, recipientId: 1, type: 1 }, { unique: true });
 const Log = campaignConn.model("Log", logSchema);
@@ -42,36 +43,6 @@ const sesClient = new SESClient({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
-
-// function getRealIp(req) {
-//   const xfwd = req.headers["x-forwarded-for"];
-//   if (xfwd) return xfwd.split(",")[0].trim();
-//   return (
-//     requestIp.getClientIp(req) ||
-//     req.connection?.remoteAddress ||
-//     req.socket?.remoteAddress ||
-//     ""
-//   );
-// }
-
-// function getRealIp(req) {
-//   // ✅ Netlify-specific header (most reliable when coming via Netlify frontend)
-//   if (req.headers['x-nf-client-connection-ip']) {
-//     return req.headers['x-nf-client-connection-ip'];
-//   }
-
-//   // ✅ Standard X-Forwarded-For header (set by proxies like Nginx)
-//   if (req.headers['x-forwarded-for']) {
-//     return req.headers['x-forwarded-for'].split(',')[0].trim();
-//   }
-
-//   // ✅ Standard Express fallback chain
-//   return (
-//     req.connection?.remoteAddress?.replace(/^::ffff:/, '') ||
-//     req.socket?.remoteAddress?.replace(/^::ffff:/, '') ||
-//     ''
-//   );
-// }
 
 function getRealIp(req) {
   const xfwd = req.headers["x-forwarded-for"];
@@ -157,185 +128,6 @@ router.get("/track-click", async (req, res) => {
   res.redirect("https://demandmediabpm.com/");
 });
 
-// router.post("/send-campaign", async (req, res) => {
-//   const { emailId, subject, body, style, listName } = req.body;
-//   if (!emailId || !subject || !body || !listName)
-//     return res.status(400).json({ error: "Missing fields" });
-
-//   // ✅ Define campaignSchema before use
-//   const campaignSchema = new mongoose.Schema(
-//     {
-//       emailId: String,
-//       subject: String,
-//       totalSent: Number,
-//       totalBounced: Number,
-//       totalOpened: Number,
-//       totalClicked: Number,
-//       totalUnsubscribed: Number,
-//       createdAt: Date,
-//     },
-//     { strict: false }
-//   );
-
-//   try {
-//     const ContactModel = contactConn.model(
-//       listName,
-//       new mongoose.Schema({}, { strict: false }),
-//       listName
-//     );
-//     const recipients = await ContactModel.find({}, { Email: 1, FirstName: 1 });
-
-//     if (!recipients.length)
-//       return res.status(404).json({ error: "No recipients found" });
-
-//     const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
-//     await Campaign.create({
-//       emailId,
-//       subject,
-//       totalSent: recipients.length,
-//       totalBounced: 0,
-//       totalOpened: 0,
-//       totalClicked: 0,
-//       totalUnsubscribed: 0,
-//       createdAt: new Date(),
-//     });
-
-//     res.json({
-//       message: `Campaign ${emailId} initialized`,
-//       totalRecipients: recipients.length,
-//     });
-
-//     const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
-
-//     await PerCampaignModel.insertMany(
-//       recipients.map(({ Email }) => ({
-//         emailId,
-//         recipientId: Email,
-//         type: "sent",
-//         timestamp: new Date(),
-//         count: 0,
-//         ip: "NA",
-//         city: "NA",
-//         region: "NA",
-//         country: "NA",
-//         device: "NA",
-//         browser: "NA",
-//         os: "NA",
-//         bounceStatus: false,
-//         unsubscribe: false,
-//         openCount: 0,
-//         clickCount: 0,
-//         lastClickTime: null,
-//       }))
-//     );
-
-//     await Log.insertMany(
-//       recipients.map(({ Email }) => ({
-//         emailId,
-//         recipientId: Email,
-//         type: "sent",
-//         timestamp: new Date(),
-//         count: 0,
-//         bounceStatus: false,
-//       }))
-//     );
-
-//     for (const { Email: to, FirstName } of recipients) {
-//       if (!to) continue;
-
-//       let validation = { category: "valid" };
-//       try {
-//         validation = await validateSMTP(to);
-//       } catch (err) {
-//         console.error(`SMTP validation failed for ${to}:`, err.message);
-//       }
-
-//       const bounceStatus = validation.category === "invalid";
-
-//       const pixelUrl = `http://localhost:5000/api/campaign/track-pixel?emailId=${encodeURIComponent(
-//         emailId
-//       )}&recipientId=${encodeURIComponent(to)}&t=${Date.now()}`;
-//       const clickUrl = `http://localhost:5000/api/campaign/track-click?emailId=${encodeURIComponent(
-//         emailId
-//       )}&recipientId=${encodeURIComponent(to)}`;
-//       const unsubscribeUrl = `http://localhost:5000/api/campaign/track-unsubscribe?emailId=${encodeURIComponent(
-//         emailId
-//       )}&recipientId=${encodeURIComponent(to)}`;
-
-//       // 💡 Wrap your template body with <style> tag to merge style
-//       let fullHtml = `
-// <!DOCTYPE html>
-// <html>
-//   <head>
-//     <meta charset="UTF-8" />
-//     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-//     <title>${subject}</title>
-//     <style>${style || ""}</style>  <!-- Inject GrapesJS CSS here -->
-//   </head>
-//   <body>
-//     ${body}
-//   </body>
-// </html>
-// `;
-
-//       // 🔥 Replace placeholders
-//       fullHtml = fullHtml
-//         .replace(/{{firstName}}/g, FirstName || "there")
-//         .replace(/{{unsubscribeUrl}}/g, unsubscribeUrl)
-//         .replace(/{{trackingPixelUrl}}/g, pixelUrl)
-//         .replace(/{{clickUrl}}/g, clickUrl); // 👈 insert here
-
-//       // 🧃 Inline styles
-//       const htmlBody = juice(fullHtml);
-
-//       const params = {
-//         Destination: { ToAddresses: [to] },
-//         Message: {
-//           Body: { Html: { Charset: "UTF-8", Data: htmlBody } },
-//           Subject: { Charset: "UTF-8", Data: subject },
-//         },
-//         Source: process.env.FROM_EMAIL,
-//         Tags: [{ Name: "campaign", Value: emailId }],
-//       };
-
-//       try {
-//         await sesClient.send(new SendEmailCommand(params));
-//         console.log(`✅ Email sent to ${to}`);
-
-//         if (bounceStatus) {
-//           await Promise.all([
-//             PerCampaignModel.updateOne(
-//               { recipientId: to },
-//               { $set: { bounceStatus: true } }
-//             ),
-//             Log.updateOne(
-//               { emailId, recipientId: to },
-//               { $set: { bounceStatus: true } }
-//             ),
-//           ]);
-//         }
-//       } catch (err) {
-//         console.error(`❌ Failed to send to ${to}:`, err.message);
-//         if (bounceStatus) {
-//           await Promise.all([
-//             PerCampaignModel.updateOne(
-//               { recipientId: to },
-//               { $set: { bounceStatus: true } }
-//             ),
-//             Log.updateOne(
-//               { emailId, recipientId: to },
-//               { $set: { bounceStatus: true } }
-//             ),
-//           ]);
-//         }
-//       }
-//     }
-//   } catch (err) {
-//     console.error("❌ /send-campaign error:", err);
-//     res.status(500).json({ error: "Failed to send campaign" });
-//   }
-// });
-
 router.post("/send-campaign", async (req, res) => {
   const { emailId, subject, body, style, listName } = req.body;
   if (!emailId || !subject || !body || !listName)
@@ -399,7 +191,8 @@ router.post("/send-campaign", async (req, res) => {
         device: "NA",
         browser: "NA",
         os: "NA",
-        bounceStatus: false,
+        // bounceStatus: false,
+        bounceStatus: "NA",
         unsubscribe: false,
         openCount: 0,
         clickCount: 0,
@@ -414,7 +207,8 @@ router.post("/send-campaign", async (req, res) => {
         type: "sent",
         timestamp: new Date(),
         count: 0,
-        bounceStatus: false,
+        // bounceStatus: false,
+        bounceStatus: "NA",
       }))
     );
 
@@ -481,7 +275,6 @@ router.post("/send-campaign", async (req, res) => {
           timestamp: new Date(),
         });
 
-
         //.........this code i add in friday means saturday morning.
         // --- New: Async validateSMTP check ---
         // validateSMTP(to)
@@ -504,63 +297,36 @@ router.post("/send-campaign", async (req, res) => {
         //   .catch((err) => {
         //     console.error(`SMTP validation error for ${to}:`, err.message);
         //   });
-          // till here
-
-
+        // till here
       } catch (err) {
         console.error(`❌ Failed to send to ${to}:`, err.message);
       }
     }
+    // Auto-mark remaining NA as Yes after 2 minutes
+    setTimeout(async () => {
+      try {
+        await Promise.all([
+          Log.updateMany(
+            { emailId, bounceStatus: "NA" },
+            { $set: { bounceStatus: "Yes" } }
+          ),
+          campaignConn
+            .collection(emailId)
+            .updateMany(
+              { bounceStatus: "NA" },
+              { $set: { bounceStatus: "Yes" } }
+            ),
+        ]);
+        console.log(`✅ Auto-marked NA → Yes for campaign ${emailId}`);
+      } catch (err) {
+        console.error(`❌ Auto-mark NA → Yes failed for ${emailId}`, err);
+      }
+    }, 2 * 60 * 1000); // 2 minutes till here
   } catch (err) {
     console.error("❌ /send-campaign error:", err);
     res.status(500).json({ error: "Failed to send campaign" });
   }
 });
-
-// router.post("/mark-bounce", async (req, res) => {
-//   const { emailId, recipientId } = req.body;
-//   if (!emailId || !recipientId)
-//     return res.status(400).json({ error: "Missing emailId or recipientId" });
-
-//   await Promise.all([
-//     Log.updateMany({ recipientId }, { $set: { bounceStatus: true } }),
-//     campaignConn
-//       .collection(emailId)
-//       .updateMany({ recipientId }, { $set: { bounceStatus: true } }),
-//   ]);
-
-//   res.json({ success: true });
-// });
-
-// router.post("/mark-bounce", async (req, res) => {
-//   let { emailId, recipientId } = req.body;
-
-//   if (!emailId || !recipientId) {
-//     return res.status(400).json({ error: "Missing emailId or recipientId" });
-//   }
-
-//   try {
-//     const [logResult, campaignResult] = await Promise.all([
-//       Log.updateMany(
-//         { recipientId: { $regex: `^${recipientId}$`, $options: "i" } }, // match ignoring case
-//         { $set: { bounceStatus: true } }
-//       ),
-//       campaignConn.collection(emailId).updateMany(
-//         { recipientId: { $regex: `^${recipientId}$`, $options: "i" } }, // match ignoring case
-//         { $set: { bounceStatus: true } }
-//       ),
-//     ]);
-
-//     console.log(`📌 mark-bounce updated:
-//       Logs: ${logResult.modifiedCount}
-//       Campaign: ${campaignResult.modifiedCount}`);
-
-//     res.json({ success: true });
-//   } catch (error) {
-//     console.error("❌ mark-bounce error:", error);
-//     res.status(500).json({ error: "Internal server error" });
-//   }
-// });
 
 router.post("/mark-bounce", async (req, res) => {
   let { emailId, recipientId } = req.body;
@@ -594,18 +360,30 @@ router.post("/mark-bounce", async (req, res) => {
       // return res.status(404).json({ error: "Recipient not found in campaign" });
     }
 
-    // Update bounceStatus=true in the general Log collection for this recipient
+    // // Update bounceStatus=true in the general Log collection for this recipient
+    // const logResult = await Log.updateMany(
+    //   { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
+    //   { $set: { bounceStatus: true } }
+    // );
+
+    // // Update bounceStatus=true in the campaign-specific collection
+    // const campaignResult = await campaignConn
+    //   .collection(emailId)
+    //   .updateMany(
+    //     { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
+    //     { $set: { bounceStatus: true } }
+    //   );
+
     const logResult = await Log.updateMany(
       { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
-      { $set: { bounceStatus: true } }
+      { $set: { bounceStatus: "Yes" } }
     );
 
-    // Update bounceStatus=true in the campaign-specific collection
     const campaignResult = await campaignConn
       .collection(emailId)
       .updateMany(
         { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
-        { $set: { bounceStatus: true } }
+        { $set: { bounceStatus: "Yes" } }
       );
 
     console.log(`Updated bounceStatus:
@@ -618,57 +396,6 @@ router.post("/mark-bounce", async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
-
-// router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
-//   try {
-//     // const message =
-//     //   typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
-//     let message = req.body;
-//     if (typeof message === "string") {
-//       try {
-//         message = JSON.parse(message);
-//       } catch (err) {
-//         console.error("❌ Failed to parse incoming string body", err);
-//         return res.status(400).send("Invalid JSON");
-//       }
-//     }
-
-//     // 🔐 1. Handle SNS subscription confirmation
-//     if (message.Type === "SubscriptionConfirmation" && message.SubscribeURL) {
-//       await axios.get(message.SubscribeURL); // Auto-confirm subscription
-//       console.log("✅ SNS Subscription confirmed");
-//       return res.status(200).send("Subscription confirmed");
-//     }
-
-//     // 📩 2. Handle actual bounce notifications
-//     if (message.Type === "Notification") {
-//       const payload = JSON.parse(message.Message);
-//       console.log(
-//         "📩 Full SES bounce payload:",
-//         JSON.stringify(payload, null, 2)
-//       );
-
-//       if (payload.notificationType === "Bounce") {
-//         const email = payload.mail.destination[0];
-//         const emailId = payload.mail.tags?.campaign?.[0];
-
-//         if (emailId) {
-//           await axios.post(
-//             `https://truenotsendr.com/api/campaign/mark-bounce`,
-//             { emailId, recipientId: email }
-//           );
-//           console.log(`✅ Bounce marked for ${email} in ${emailId}`);
-//         }
-//       }
-//     }
-
-//     res.status(200).send("OK");
-//   } catch (err) {
-//     console.error("❌ /ses-webhook error:", err.message);
-//     res.status(500).send("Webhook processing failed");
-//   }
-// });
 
 router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
   try {
@@ -694,54 +421,81 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
       const payload = JSON.parse(message.Message);
       console.log("📩 Full SES payload:", JSON.stringify(payload, null, 2));
 
-      if (payload.notificationType === "Bounce") {
-        // Defensive extraction of emailId and recipient
-        // const bouncedRecipient = payload.bounce.bouncedRecipients?.[0]?.emailAddress;
-        // const emailId = payload.mail.tags?.campaign?.[0]; // might be undefined
-        // const messageId = payload.mail.messageId; // fallback identifier
+      // if (payload.notificationType === "Bounce") {
 
-        // if (emailId) {
-        //   // If emailId available, mark bounce in DB
-        //   await axios.post(
-        //     `https://truenotsendr.com/api/campaign/mark-bounce`,
-        //     { emailId, recipientId: bouncedRecipient }
-        //   );
-        //   console.log(`✅ Bounce marked for ${bouncedRecipient} in campaign ${emailId}`);
-        // } else {
-        //   // emailId missing - log and optionally store for manual review or future processing
-        //   console.warn(`⚠️ Bounce received for ${bouncedRecipient} but emailId (campaign) missing. MessageId: ${messageId}`);
+      //   const bouncedRecipient =
+      //     payload.bounce.bouncedRecipients?.[0]?.emailAddress;
+      //   let emailId = payload.mail.tags?.campaign?.[0]; // might be undefined
+      //   const messageId = payload.mail.messageId;
 
-        //   // Optional: You can store this bounce info somewhere for manual handling or later mapping
-        //   // e.g. save in a DB collection for bounces without campaign info
-        // }
+      //   if (!emailId) {
+      //     // Lookup emailId from your MessageIdMap collection
+      //     const mapping = await campaignConn
+      //       .collection("MessageIdMap")
+      //       .findOne({ messageId });
+      //     if (mapping) {
+      //       emailId = mapping.emailId;
+      //     }
+      //   }
 
-        const bouncedRecipient =
-          payload.bounce.bouncedRecipients?.[0]?.emailAddress;
-        let emailId = payload.mail.tags?.campaign?.[0]; // might be undefined
+      //   if (emailId) {
+      //     // Mark bounce in DB
+      //     await axios.post(
+      //       `https://truenotsendr.com/api/campaign/mark-bounce`,
+      //       { emailId, recipientId: bouncedRecipient }
+      //     );
+      //     console.log(
+      //       `✅ Bounce marked for ${bouncedRecipient} in campaign ${emailId}`
+      //     );
+      //   } else {
+      //     console.warn(
+      //       `⚠️ Bounce received for ${bouncedRecipient} but emailId (campaign) missing. MessageId: ${messageId}`
+      //     );
+      //   }
+      // }
+
+      if (
+        payload.notificationType === "Bounce" ||
+        payload.notificationType === "Delivery"
+      ) {
+        const recipient =
+          payload.bounce?.bouncedRecipients?.[0]?.emailAddress ||
+          payload.delivery?.recipients?.[0];
+        let emailId = payload.mail.tags?.campaign?.[0];
         const messageId = payload.mail.messageId;
 
         if (!emailId) {
-          // Lookup emailId from your MessageIdMap collection
           const mapping = await campaignConn
             .collection("MessageIdMap")
             .findOne({ messageId });
-          if (mapping) {
-            emailId = mapping.emailId;
-          }
+          if (mapping) emailId = mapping.emailId;
         }
 
-        if (emailId) {
-          // Mark bounce in DB
-          await axios.post(
-            `https://truenotsendr.com/api/campaign/mark-bounce`,
-            { emailId, recipientId: bouncedRecipient }
-          );
+        if (emailId && recipient) {
+          const status = payload.notificationType === "Bounce" ? "Yes" : "No";
+          await Promise.all([
+            Log.updateMany(
+              {
+                emailId,
+                recipientId: { $regex: `^${recipient}$`, $options: "i" },
+              },
+              { $set: { bounceStatus: status } }
+            ),
+            campaignConn
+              .collection(emailId)
+              .updateMany(
+                { recipientId: { $regex: `^${recipient}$`, $options: "i" } },
+                { $set: { bounceStatus: status } }
+              ),
+          ]);
           console.log(
-            `✅ Bounce marked for ${bouncedRecipient} in campaign ${emailId}`
+            `✅ ${
+              status === "Yes" ? "Bounce" : "Delivery"
+            } marked for ${recipient} in campaign ${emailId}`
           );
         } else {
           console.warn(
-            `⚠️ Bounce received for ${bouncedRecipient} but emailId (campaign) missing. MessageId: ${messageId}`
+            `⚠️ ${payload.notificationType} for ${recipient} but emailId missing. MessageId: ${messageId}`
           );
         }
       }
@@ -765,8 +519,12 @@ router.get("/campaign-analytics", async (req, res) => {
 
   const campaignCollection = campaignConn.collection(emailId);
   const recipients = await campaignCollection.distinct("recipientId");
+  // const bounces = await campaignCollection
+  //   .find({ bounceStatus: true })
+  //   .toArray();
+
   const bounces = await campaignCollection
-    .find({ bounceStatus: true })
+    .find({ bounceStatus: "Yes" })
     .toArray();
 
   const unsubscribeCount = unsubscribes.length;
@@ -843,7 +601,8 @@ router.get("/campaign-details", async (req, res) => {
       details[r].unsubscribe = true;
     }
 
-    if (log.bounceStatus) details[r].bounceStatus = true;
+    // if (log.bounceStatus) details[r].bounceStatus = true;
+    if (log.bounceStatus === "Yes") details[r].bounceStatus = true;
   }
   res.json(Object.values(details));
 });
@@ -978,7 +737,11 @@ router.get("/campaign-csv", async (req, res) => {
       if (log.type === "unsubscribe") {
         details[r].Unsubscribed = "Yes";
       }
-      if (log.bounceStatus) {
+      // if (log.bounceStatus) {
+      //   details[r].Bounced = "Yes";
+      // }
+
+      if (log.bounceStatus === "Yes") {
         details[r].Bounced = "Yes";
       }
     }

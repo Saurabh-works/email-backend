@@ -133,6 +133,8 @@ router.get("/track-click", async (req, res) => {
   res.redirect("https://demandmediabpm.com/");
 });
 
+const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
+
 router.post("/send-campaign", async (req, res) => {
   const { emailId, subject, body, style, listName } = req.body;
   if (!emailId || !subject || !body || !listName)
@@ -162,6 +164,8 @@ router.post("/send-campaign", async (req, res) => {
 
     if (!recipients.length)
       return res.status(404).json({ error: "No recipients found" });
+
+    campaignProgress[emailId] = { sent: 0, total: recipients.length };
 
     const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
     await Campaign.create({
@@ -303,10 +307,12 @@ router.post("/send-campaign", async (req, res) => {
         //     console.error(`SMTP validation error for ${to}:`, err.message);
         //   });
         // till here
+        campaignProgress[emailId].sent += 1;
       } catch (err) {
         console.error(`❌ Failed to send to ${to}:`, err.message);
       }
     }
+    campaignProgress[emailId].sent = campaignProgress[emailId].total;
     // Auto-mark remaining NA as Yes after 2 minutes
     // Auto-mark remaining NA as Yes after 2 minutes (only if no delivery/open/click)
     setTimeout(async () => {
@@ -365,6 +371,29 @@ router.post("/send-campaign", async (req, res) => {
     console.error("❌ /send-campaign error:", err);
     res.status(500).json({ error: "Failed to send campaign" });
   }
+});
+
+// Add at the top
+// const progressMap = {}; // { emailId: { sent: 0, total: 0 } }
+
+// New route for SSE
+router.get("/send-campaign-progress", (req, res) => {
+  const { emailId } = req.query;
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.flushHeaders();
+
+  const sendProgress = () => {
+    if (campaignProgress[emailId]) {
+      res.write(`data: ${JSON.stringify(campaignProgress[emailId])}\n\n`);
+    }
+  };
+
+  const interval = setInterval(sendProgress, 1000);
+
+  req.on("close", () => {
+    clearInterval(interval);
+  });
 });
 
 router.post("/mark-bounce", async (req, res) => {

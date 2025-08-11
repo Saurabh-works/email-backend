@@ -100,12 +100,20 @@ router.delete("/:id", async (req, res) => {
 // RENAME a template
 router.patch("/:id/rename", async (req, res) => {
   try {
+    console.log("Rename request:", req.params.id, req.body);
     const { name } = req.body;
+    if (!name) return res.status(400).json({ error: "Name is required" });
+
     const updated = await EmailTemplate.findByIdAndUpdate(
       req.params.id,
       { name },
       { new: true }
     );
+
+    if (!updated) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+
     res.json(updated);
   } catch (err) {
     console.error("Rename error:", err);

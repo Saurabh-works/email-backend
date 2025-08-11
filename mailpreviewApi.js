@@ -36,15 +36,15 @@ router.get("/", async (req, res) => {
 });
 
 // GET one
-router.get("/", async (req, res) => {
-  try {
-    const templates = await EmailTemplate.find().sort({ createdAt: -1 });
-    res.json(templates); // must be an array
-  } catch (err) {
-    console.error("Fetch error:", err);
-    res.status(500).json({ error: "Failed to fetch templates" });
-  }
-});
+// router.get("/", async (req, res) => {
+//   try {
+//     const templates = await EmailTemplate.find().sort({ createdAt: -1 });
+//     res.json(templates); // must be an array
+//   } catch (err) {
+//     console.error("Fetch error:", err);
+//     res.status(500).json({ error: "Failed to fetch templates" });
+//   }
+// });
 
 // CREATE
 router.post("/", async (req, res) => {

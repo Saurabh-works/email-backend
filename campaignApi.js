@@ -731,7 +731,7 @@ router.get("/campaign-ids", async (_, res) => {
       (name) =>
         name.toLowerCase() !== "logs" &&
         name.toLowerCase() !== "campaign" &&
-        name.toLowerCase() !== "MessageIdMap"
+        name.toLowerCase() !== "messageidmap"
     );
   res.json(ids);
 });

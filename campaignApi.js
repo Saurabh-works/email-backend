@@ -58,14 +58,75 @@ function getRealIp(req) {
 
 const isBot = (ua) => /bot|crawler|preview|headless/i.test(ua);
 
+// async function logEvent(req, type) {
+//   // const ip = requestIp.getClientIp(req) || "";
+//   const ip = getRealIp(req);
+//   const ua = req.headers["user-agent"] || "";
+//   const { emailId, recipientId } = req.query;
+//   if (!emailId || !recipientId || isBot(ua)) return;
+
+//   // 🟡 Allow 'unsubscribe' even without user-agent (headless/email clients)
+//   if (type !== "unsubscribe" && isBot(ua)) return;
+
+//   if (type === "click") {
+//     const recentClick = await Log.findOne({
+//       emailId,
+//       recipientId,
+//       type,
+//       timestamp: { $gte: new Date(Date.now() - 5000) },
+//     });
+//     if (recentClick) return;
+//   }
+
+//   const { device, browser, os } = uaParser(ua);
+//   let geo = {};
+//   try {
+//     geo = (
+//       await axios.get(
+//         `https://ipinfo.io/${ip}?token=${process.env.IPINFO_TOKEN}`
+//       )
+//     ).data;
+//   } catch {}
+
+//   const updateData = {
+//     $inc: { count: 1 },
+//     $set: {
+//       timestamp: new Date(),
+//       ip,
+//       city: geo.city || "",
+//       region: geo.region || "",
+//       country: geo.country || "",
+//       device: device.type || "desktop",
+//       browser: browser.name || "",
+//       os: os.name || "",
+//     },
+//   };
+
+//   // 🛑 Prevent accidental bounceStatus overwrite on open/click/unsubscribe
+//   if (type !== "sent") {
+//     delete updateData.$set.bounceStatus;
+//   }
+
+//   await Log.findOneAndUpdate({ emailId, recipientId, type }, updateData, {
+//     upsert: true,
+//   });
+//   const CampaignModel = campaignConn.model(emailId, logSchema, emailId);
+//   await CampaignModel.findOneAndUpdate(
+//     { emailId, recipientId, type },
+//     updateData,
+//     { upsert: true }
+//   );
+// }
+
+
+
 async function logEvent(req, type) {
-  // const ip = requestIp.getClientIp(req) || "";
   const ip = getRealIp(req);
   const ua = req.headers["user-agent"] || "";
   const { emailId, recipientId } = req.query;
   if (!emailId || !recipientId || isBot(ua)) return;
 
-  // 🟡 Allow 'unsubscribe' even without user-agent (headless/email clients)
+  // Allow unsubscribe without UA detection
   if (type !== "unsubscribe" && isBot(ua)) return;
 
   if (type === "click") {
@@ -102,21 +163,46 @@ async function logEvent(req, type) {
     },
   };
 
-  // 🛑 Prevent accidental bounceStatus overwrite on open/click/unsubscribe
   if (type !== "sent") {
     delete updateData.$set.bounceStatus;
   }
 
+  // Update Log collection
   await Log.findOneAndUpdate({ emailId, recipientId, type }, updateData, {
     upsert: true,
   });
-  const CampaignModel = campaignConn.model(emailId, logSchema, emailId);
-  await CampaignModel.findOneAndUpdate(
+
+  // Update per-campaign collection
+  const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
+  await PerCampaignModel.findOneAndUpdate(
     { emailId, recipientId, type },
     updateData,
     { upsert: true }
   );
+
+  // Extra: If it's an OPEN, increment openCount & Campaign.totalOpened if first open
+  if (type === "open") {
+    const sentRow = await PerCampaignModel.findOne({ recipientId, type: "sent" });
+
+    if (sentRow && sentRow.openCount === 0) {
+      await PerCampaignModel.updateOne(
+        { recipientId, type: "sent" },
+        { $inc: { openCount: 1 } }
+      );
+
+      const Campaign = campaignConn.model(
+        "Campaign",
+        new mongoose.Schema({}, { strict: false }),
+        "Campaign"
+      );
+      await Campaign.updateOne(
+        { emailId },
+        { $inc: { totalOpened: 1 } }
+      );
+    }
+  }
 }
+
 
 router.get("/track-pixel", async (req, res) => {
   await logEvent(req, "open");
@@ -145,38 +231,23 @@ router.get("/track-pixel", async (req, res) => {
 // });
 
 
-
 router.get("/track-click", async (req, res) => {
   const { emailId, recipientId, redirect } = req.query;
 
   try {
-    // Always record the click
     await logEvent(req, "click");
 
     if (emailId && recipientId) {
-      const PerCampaignModel = campaignConn.model(
-        emailId,
-        logSchema,
-        emailId
-      );
+      const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
+      const sentRow = await PerCampaignModel.findOne({ recipientId, type: "sent" });
 
-      // Check open count in per-campaign collection
-      const userLog = await PerCampaignModel.findOne({ recipientId });
-
-      if (userLog && userLog.openCount === 0) {
-        // Record open so it increments total + unique automatically
+      if (sentRow && sentRow.openCount === 0) {
         await logEvent(req, "open");
-
-        console.log(
-          `📩 No opens yet — recorded an "open" for recipient=${recipientId} campaign=${emailId} due to click.`
-        );
+        console.log(`📩 No opens yet — logged open via click for ${recipientId}`);
       }
     }
 
-    // Redirect as before
-    const target = redirect || "https://demandmediabpm.com/";
-    res.redirect(target);
-
+    res.redirect(redirect || "https://demandmediabpm.com/");
   } catch (err) {
     console.error("❌ Error in /track-click:", err);
     res.redirect(redirect || "https://demandmediabpm.com/");

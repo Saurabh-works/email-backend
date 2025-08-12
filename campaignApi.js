@@ -137,12 +137,56 @@ router.get("/track-pixel", async (req, res) => {
 //   res.redirect("https://demandmediabpm.com/");
 // });
 
-router.get("/track-click", async (req, res) => {
-  await logEvent(req, "click");
+// router.get("/track-click", async (req, res) => {
+//   await logEvent(req, "click");
 
-  const target = req.query.redirect || "https://demandmediabpm.com/";
-  res.redirect(target);
+//   const target = req.query.redirect || "https://demandmediabpm.com/";
+//   res.redirect(target);
+// });
+
+router.get("/track-click", async (req, res) => {
+  const { emailId, recipientId, redirect } = req.query;
+
+  try {
+    await logEvent(req, "click");
+
+    if (emailId && recipientId) {
+      const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
+      const Campaign = campaignConn.model(
+        "Campaign",
+        new mongoose.Schema({}, { strict: false }),
+        "Campaign"
+      );
+
+      // Check if this recipient has no opens yet
+      const userLog = await PerCampaignModel.findOne({ recipientId });
+
+      if (userLog && userLog.openCount === 0) {
+        await PerCampaignModel.updateOne(
+          { recipientId },
+          { $inc: { openCount: 1 } }
+        );
+
+        await Campaign.updateOne(
+          { emailId },
+          { $inc: { totalOpened: 1 } }
+        );
+
+        console.log(
+          `📩 Click recorded as open for recipient: ${recipientId} in campaign: ${emailId}`
+        );
+      }
+    }
+
+    const target = redirect;
+    res.redirect(target);
+
+  } catch (err) {
+    console.error("❌ Error in /track-click:", err);
+    // res.redirect(redirect || "https://demandmediabpm.com/");
+  }
 });
+
 
 
 const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }

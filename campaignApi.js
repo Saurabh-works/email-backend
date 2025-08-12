@@ -162,15 +162,26 @@ router.get("/track-click", async (req, res) => {
       const userLog = await PerCampaignModel.findOne({ recipientId });
 
       if (userLog && userLog.openCount === 0) {
+        // 1️⃣ Mark open in PerCampaignModel
         await PerCampaignModel.updateOne(
           { recipientId },
           { $inc: { openCount: 1 } }
         );
 
+        // 2️⃣ Update campaign totalOpened
         await Campaign.updateOne(
           { emailId },
           { $inc: { totalOpened: 1 } }
         );
+
+        // 3️⃣ Add an "open" event in Log collection (for analytics)
+        await Log.create({
+          emailId,
+          recipientId,
+          type: "open",
+          timestamp: new Date(),
+          count: 1
+        });
 
         console.log(
           `📩 Click recorded as open for recipient: ${recipientId} in campaign: ${emailId}`
@@ -178,14 +189,15 @@ router.get("/track-click", async (req, res) => {
       }
     }
 
-    const target = redirect;
+    const target = redirect || "https://demandmediabpm.com/";
     res.redirect(target);
 
   } catch (err) {
     console.error("❌ Error in /track-click:", err);
-    // res.redirect(redirect || "https://demandmediabpm.com/");
+    res.redirect(redirect || "https://demandmediabpm.com/");
   }
 });
+
 
 
 

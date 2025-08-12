@@ -144,51 +144,36 @@ router.get("/track-pixel", async (req, res) => {
 //   res.redirect(target);
 // });
 
+
+
 router.get("/track-click", async (req, res) => {
   const { emailId, recipientId, redirect } = req.query;
 
   try {
+    // Always record the click
     await logEvent(req, "click");
 
     if (emailId && recipientId) {
-      const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
-      const Campaign = campaignConn.model(
-        "Campaign",
-        new mongoose.Schema({}, { strict: false }),
-        "Campaign"
+      const PerCampaignModel = campaignConn.model(
+        emailId,
+        logSchema,
+        emailId
       );
 
-      // Check if this recipient has no opens yet
+      // Check open count in per-campaign collection
       const userLog = await PerCampaignModel.findOne({ recipientId });
 
       if (userLog && userLog.openCount === 0) {
-        // 1️⃣ Mark open in PerCampaignModel
-        await PerCampaignModel.updateOne(
-          { recipientId },
-          { $inc: { openCount: 1 } }
-        );
-
-        // 2️⃣ Update campaign totalOpened
-        await Campaign.updateOne(
-          { emailId },
-          { $inc: { totalOpened: 1 } }
-        );
-
-        // 3️⃣ Add an "open" event in Log collection (for analytics)
-        await Log.create({
-          emailId,
-          recipientId,
-          type: "open",
-          timestamp: new Date(),
-          count: 1
-        });
+        // Record open so it increments total + unique automatically
+        await logEvent(req, "open");
 
         console.log(
-          `📩 Click recorded as open for recipient: ${recipientId} in campaign: ${emailId}`
+          `📩 No opens yet — recorded an "open" for recipient=${recipientId} campaign=${emailId} due to click.`
         );
       }
     }
 
+    // Redirect as before
     const target = redirect || "https://demandmediabpm.com/";
     res.redirect(target);
 

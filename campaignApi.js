@@ -147,11 +147,8 @@ router.get("/track-click", async (req, res) => {
 
 const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 
-// router.post("/send-campaign", async (req, res) => {
-//   const { emailId, subject, body, style, listName, redirectUrl} = req.body;
-//   if (!emailId || !subject || !body || !listName)
-//     return res.status(400).json({ error: "Missing fields" });
-
+// // Helper function with your full existing send logic
+// async function sendCampaignNow({ emailId, subject, body, style, listName, redirectUrl }) {
 //   const campaignSchema = new mongoose.Schema(
 //     {
 //       emailId: String,
@@ -163,7 +160,6 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //       totalUnsubscribed: Number,
 //       status: String,
 //       createdAt: Date,
-//    
 //     },
 //     { strict: false }
 //   );
@@ -176,8 +172,10 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //     );
 //     const recipients = await ContactModel.find({}, { Email: 1, FirstName: 1 });
 
-//     if (!recipients.length)
-//       return res.status(404).json({ error: "No recipients found" });
+//     if (!recipients.length) {
+//       console.warn(`No recipients found for campaign ${emailId}`);
+//       return;
+//     }
 
 //     campaignProgress[emailId] = {
 //       sent: 0,
@@ -186,23 +184,15 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //     };
 
 //     const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
-//     await Campaign.create({
-//       emailId,
-//       subject,
-//       redirectUrl,
-//       totalSent: recipients.length,
-//       totalBounced: 0,
-//       totalOpened: 0,
-//       totalClicked: 0,
-//       totalUnsubscribed: 0,
-//       status: "pending",
-//       createdAt: new Date(),
-//     });
-
-//     res.json({
-//       message: `Campaign ${emailId} initialized`,
-//       totalRecipients: recipients.length,
-//     });
+//     await Campaign.updateOne(
+//       { emailId },
+//       {
+//         $set: {
+//           totalSent: recipients.length,
+//           status: "pending",
+//         },
+//       }
+//     );
 
 //     const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
 
@@ -220,7 +210,6 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //         device: "NA",
 //         browser: "NA",
 //         os: "NA",
-//         // bounceStatus: false,
 //         bounceStatus: "NA",
 //         unsubscribe: false,
 //         openCount: 0,
@@ -236,7 +225,6 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //         type: "sent",
 //         timestamp: new Date(),
 //         count: 0,
-//         // bounceStatus: false,
 //         bounceStatus: "NA",
 //       }))
 //     );
@@ -249,7 +237,9 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //       )}&recipientId=${encodeURIComponent(to)}&t=${Date.now()}`;
 //       const clickUrl = `https://truenotsendr.com/api/campaign/track-click?emailId=${encodeURIComponent(
 //         emailId
-//       )}&recipientId=${encodeURIComponent(to)}&redirect=${encodeURIComponent(redirectUrl)}`;
+//       )}&recipientId=${encodeURIComponent(to)}&redirect=${encodeURIComponent(
+//         redirectUrl
+//       )}`;
 //       const unsubscribeUrl = `https://truenotsendr.com/api/campaign/track-unsubscribe?emailId=${encodeURIComponent(
 //         emailId
 //       )}&recipientId=${encodeURIComponent(to)}`;
@@ -288,15 +278,11 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //       };
 
 //       try {
-//         // await sesClient.send(new SendEmailCommand(params));
-//         // console.log(`✅ Email sent to ${to}`);
-
 //         const sendResult = await sesClient.send(new SendEmailCommand(params));
 //         const messageId = sendResult.MessageId;
 
 //         console.log(`✅ Email sent to ${to} with MessageId ${messageId}`);
 
-//         // Save MessageId mapping in DB
 //         await campaignConn.collection("MessageIdMap").insertOne({
 //           messageId,
 //           emailId,
@@ -304,29 +290,6 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //           timestamp: new Date(),
 //         });
 
-//         //.........this code i add in friday means saturday morning.
-//         // --- New: Async validateSMTP check ---
-//         // validateSMTP(to)
-//         //   .then(async (isBounce) => {
-//         //     if (isBounce) {
-//         //       console.log(`⚠️ Marking bounce for ${to} after SMTP validation`);
-//         //       // Update bounceStatus true in logs and campaign collection
-//         //       await Log.updateMany(
-//         //         { emailId, recipientId: to },
-//         //         { $set: { bounceStatus: true } }
-//         //       );
-//         //       await campaignConn
-//         //         .collection(emailId)
-//         //         .updateMany(
-//         //           { recipientId: to },
-//         //           { $set: { bounceStatus: true } }
-//         //         );
-//         //     }
-//         //   })
-//         //   .catch((err) => {
-//         //     console.error(`SMTP validation error for ${to}:`, err.message);
-//         //   });
-//         // till here
 //         campaignProgress[emailId].sent += 1;
 //         await Campaign.updateOne(
 //           { emailId },
@@ -336,32 +299,12 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //         console.error(`❌ Failed to send to ${to}:`, err.message);
 //       }
 //     }
+
 //     campaignProgress[emailId].status = "completed";
 //     await Campaign.updateOne({ emailId }, { $set: { status: "completed" } });
-//     // Auto-mark remaining NA as Yes after 2 minutes
-//     // Auto-mark remaining NA as Yes after 2 minutes (only if no delivery/open/click)
+
 //     setTimeout(async () => {
 //       try {
-//         // Only mark as Yes if still NA AND no "open" or "click" events
-//         // await Promise.all([
-//         //   Log.updateMany(
-//         //     {
-//         //       emailId,
-//         //       bounceStatus: "NA",
-//         //       type: "sent", // only sent entries
-//         //     },
-//         //     { $set: { bounceStatus: "Yes" } }
-//         //   ),
-//         //   campaignConn.collection(emailId).updateMany(
-//         //     {
-//         //       bounceStatus: "NA",
-//         //       type: "sent", // only sent entries
-//         //     },
-//         //     { $set: { bounceStatus: "Yes" } }
-//         //   ),
-//         // ]);
-
-//         // Get list of recipients who have interacted
 //         const interactedRecipients = await Log.distinct("recipientId", {
 //           emailId,
 //           type: { $in: ["open", "click", "unsubscribe"] },
@@ -393,24 +336,15 @@ const campaignProgress = {}; // { [emailId]: { sent: number, total: number } }
 //       }
 //     }, 30000);
 //   } catch (err) {
-//     console.error("❌ /send-campaign error:", err);
-//     res.status(500).json({ error: "Failed to send campaign" });
+//     console.error("❌ sendCampaignNow error:", err);
 //   }
-// });
+// }
 
 
 
 
 
-
-
-
-
-
-
-
-
-// Helper function with your full existing send logic
+// Helper function with your full existing send logic + batching
 async function sendCampaignNow({ emailId, subject, body, style, listName, redirectUrl }) {
   const campaignSchema = new mongoose.Schema(
     {
@@ -426,6 +360,38 @@ async function sendCampaignNow({ emailId, subject, body, style, listName, redire
     },
     { strict: false }
   );
+
+  // Batch config
+  const BATCH_SIZE = parseInt(process.env.CAMPAIGN_BATCH_SIZE || "100", 10);
+  const BATCH_DELAY_MS = parseInt(process.env.CAMPAIGN_BATCH_DELAY_MS || "30000", 10); // 5 sec delay
+  const CONCURRENCY = parseInt(process.env.CAMPAIGN_CONCURRENCY || "10", 10); // parallel sends in a batch
+
+  // Helpers
+  function chunkArray(arr, size) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  }
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  async function promisePool(items, worker, concurrency) {
+    const results = new Array(items.length);
+    let i = 0;
+    const workers = new Array(Math.min(concurrency, items.length)).fill(null).map(async () => {
+      while (true) {
+        const idx = i++;
+        if (idx >= items.length) break;
+        try {
+          results[idx] = await worker(items[idx], idx);
+        } catch (err) {
+          results[idx] = { ok: false, error: err?.message || String(err) };
+        }
+      }
+    });
+    await Promise.all(workers);
+    return results;
+  }
 
   try {
     const ContactModel = contactConn.model(
@@ -458,7 +424,6 @@ async function sendCampaignNow({ emailId, subject, body, style, listName, redire
     );
 
     const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
-
     await PerCampaignModel.insertMany(
       recipients.map(({ Email }) => ({
         emailId,
@@ -478,7 +443,8 @@ async function sendCampaignNow({ emailId, subject, body, style, listName, redire
         openCount: 0,
         clickCount: 0,
         lastClickTime: null,
-      }))
+      })),
+      { ordered: false }
     );
 
     await Log.insertMany(
@@ -489,25 +455,31 @@ async function sendCampaignNow({ emailId, subject, body, style, listName, redire
         timestamp: new Date(),
         count: 0,
         bounceStatus: "NA",
-      }))
+      })),
+      { ordered: false }
     );
 
-    for (const { Email: to, FirstName } of recipients) {
-      if (!to) continue;
+    // ---- BATCHED SENDING ----
+    const batches = chunkArray(recipients, BATCH_SIZE);
 
-      const pixelUrl = `https://truenotsendr.com/api/campaign/track-pixel?emailId=${encodeURIComponent(
-        emailId
-      )}&recipientId=${encodeURIComponent(to)}&t=${Date.now()}`;
-      const clickUrl = `https://truenotsendr.com/api/campaign/track-click?emailId=${encodeURIComponent(
-        emailId
-      )}&recipientId=${encodeURIComponent(to)}&redirect=${encodeURIComponent(
-        redirectUrl
-      )}`;
-      const unsubscribeUrl = `https://truenotsendr.com/api/campaign/track-unsubscribe?emailId=${encodeURIComponent(
-        emailId
-      )}&recipientId=${encodeURIComponent(to)}`;
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      console.log(`➡️ Sending batch ${batchIndex + 1}/${batches.length} — ${batch.length} recipients`);
 
-      let fullHtml = `
+      const worker = async ({ Email: to, FirstName }) => {
+        if (!to) return;
+
+        const pixelUrl = `https://truenotsendr.com/api/campaign/track-pixel?emailId=${encodeURIComponent(
+          emailId
+        )}&recipientId=${encodeURIComponent(to)}&t=${Date.now()}`;
+        const clickUrl = `https://truenotsendr.com/api/campaign/track-click?emailId=${encodeURIComponent(
+          emailId
+        )}&recipientId=${encodeURIComponent(to)}&redirect=${encodeURIComponent(redirectUrl)}`;
+        const unsubscribeUrl = `https://truenotsendr.com/api/campaign/track-unsubscribe?emailId=${encodeURIComponent(
+          emailId
+        )}&recipientId=${encodeURIComponent(to)}`;
+
+        let fullHtml = `
 <!DOCTYPE html>
 <html>
   <head>
@@ -522,50 +494,60 @@ async function sendCampaignNow({ emailId, subject, body, style, listName, redire
 </html>
 `;
 
-      fullHtml = fullHtml
-        .replace(/{{firstName}}/g, FirstName || "there")
-        .replace(/{{unsubscribeUrl}}/g, unsubscribeUrl)
-        .replace(/{{trackingPixelUrl}}/g, pixelUrl)
-        .replace(/{{clickUrl}}/g, clickUrl);
+        fullHtml = fullHtml
+          .replace(/{{firstName}}/g, FirstName || "there")
+          .replace(/{{unsubscribeUrl}}/g, unsubscribeUrl)
+          .replace(/{{trackingPixelUrl}}/g, pixelUrl)
+          .replace(/{{clickUrl}}/g, clickUrl);
 
-      const htmlBody = juice(fullHtml);
+        const htmlBody = juice(fullHtml);
 
-      const params = {
-        Destination: { ToAddresses: [to] },
-        Message: {
-          Body: { Html: { Charset: "UTF-8", Data: htmlBody } },
-          Subject: { Charset: "UTF-8", Data: subject },
-        },
-        Source: process.env.FROM_EMAIL,
-        Tags: [{ Name: "campaign", Value: emailId }],
+        const params = {
+          Destination: { ToAddresses: [to] },
+          Message: {
+            Body: { Html: { Charset: "UTF-8", Data: htmlBody } },
+            Subject: { Charset: "UTF-8", Data: subject },
+          },
+          Source: process.env.FROM_EMAIL,
+          Tags: [{ Name: "campaign", Value: emailId }],
+        };
+
+        try {
+          const sendResult = await sesClient.send(new SendEmailCommand(params));
+          const messageId = sendResult.MessageId;
+
+          console.log(`✅ Email sent to ${to} with MessageId ${messageId}`);
+
+          await campaignConn.collection("MessageIdMap").insertOne({
+            messageId,
+            emailId,
+            recipientId: to,
+            timestamp: new Date(),
+          });
+
+          campaignProgress[emailId].sent += 1;
+          await Campaign.updateOne(
+            { emailId },
+            { $set: { sentCount: campaignProgress[emailId].sent } }
+          );
+        } catch (err) {
+          console.error(`❌ Failed to send to ${to}:`, err.message);
+        }
       };
 
-      try {
-        const sendResult = await sesClient.send(new SendEmailCommand(params));
-        const messageId = sendResult.MessageId;
+      await promisePool(batch, worker, CONCURRENCY);
 
-        console.log(`✅ Email sent to ${to} with MessageId ${messageId}`);
-
-        await campaignConn.collection("MessageIdMap").insertOne({
-          messageId,
-          emailId,
-          recipientId: to,
-          timestamp: new Date(),
-        });
-
-        campaignProgress[emailId].sent += 1;
-        await Campaign.updateOne(
-          { emailId },
-          { $set: { sentCount: campaignProgress[emailId].sent } }
-        );
-      } catch (err) {
-        console.error(`❌ Failed to send to ${to}:`, err.message);
+      if (batchIndex < batches.length - 1) {
+        console.log(`⏳ Waiting ${BATCH_DELAY_MS}ms before next batch...`);
+        await sleep(BATCH_DELAY_MS);
       }
     }
 
+    // ---- COMPLETE ----
     campaignProgress[emailId].status = "completed";
     await Campaign.updateOne({ emailId }, { $set: { status: "completed" } });
 
+    // Auto-mark NA → Yes after 30 seconds
     setTimeout(async () => {
       try {
         const interactedRecipients = await Log.distinct("recipientId", {
@@ -602,6 +584,9 @@ async function sendCampaignNow({ emailId, subject, body, style, listName, redire
     console.error("❌ sendCampaignNow error:", err);
   }
 }
+
+
+
 
 // Main route with scheduling
 router.post("/send-campaign", async (req, res) => {

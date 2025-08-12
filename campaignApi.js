@@ -118,17 +118,16 @@ const isBot = (ua) => /bot|crawler|preview|headless/i.test(ua);
 //   );
 // }
 
-
-
 async function logEvent(req, type) {
   const ip = getRealIp(req);
   const ua = req.headers["user-agent"] || "";
   const { emailId, recipientId } = req.query;
-  if (!emailId || !recipientId || isBot(ua)) return;
+  if (!emailId || !recipientId) return;
 
   // Allow unsubscribe without UA detection
   if (type !== "unsubscribe" && isBot(ua)) return;
 
+  // Prevent duplicate click logs in short window (existing behavior)
   if (type === "click") {
     const recentClick = await Log.findOne({
       emailId,
@@ -144,10 +143,12 @@ async function logEvent(req, type) {
   try {
     geo = (
       await axios.get(
-        `https://ipinfo.io/${ip}?token=${process.env.IPINFO_TOKEN}`
+        `https://ipinfo.io/${getRealIp(req)}?token=${process.env.IPINFO_TOKEN}`
       )
     ).data;
-  } catch {}
+  } catch (e) {
+    geo = {};
+  }
 
   const updateData = {
     $inc: { count: 1 },
@@ -157,20 +158,30 @@ async function logEvent(req, type) {
       city: geo.city || "",
       region: geo.region || "",
       country: geo.country || "",
-      device: device.type || "desktop",
-      browser: browser.name || "",
-      os: os.name || "",
+      device: device?.type || "desktop",
+      browser: browser?.name || "",
+      os: os?.name || "",
     },
   };
 
+  // Prevent accidental bounceStatus overwrite on open/click/unsubscribe
   if (type !== "sent") {
     delete updateData.$set.bounceStatus;
   }
 
-  // Update Log collection
-  await Log.findOneAndUpdate({ emailId, recipientId, type }, updateData, {
-    upsert: true,
-  });
+  // If this is an 'open' event, check whether an open already exists (so we can detect "first open")
+  let wasOpenBefore = false;
+  if (type === "open") {
+    const existingOpen = await Log.findOne({ emailId, recipientId, type: "open" });
+    wasOpenBefore = !!existingOpen;
+  }
+
+  // Update Log collection (creates or increments open/click/unsubscribe docs)
+  await Log.findOneAndUpdate(
+    { emailId, recipientId, type },
+    updateData,
+    { upsert: true }
+  );
 
   // Update per-campaign collection
   const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
@@ -180,25 +191,28 @@ async function logEvent(req, type) {
     { upsert: true }
   );
 
-  // Extra: If it's an OPEN, increment openCount & Campaign.totalOpened if first open
-  if (type === "open") {
-    const sentRow = await PerCampaignModel.findOne({ recipientId, type: "sent" });
+  // Extra: If it's an OPEN and it was the **first** open for this recipient,
+  // increment the "sent" row's openCount and Campaign.totalOpened (only once).
+  if (type === "open" && !wasOpenBefore) {
+    try {
+      const sentRow = await PerCampaignModel.findOne({ recipientId, type: "sent" });
 
-    if (sentRow && sentRow.openCount === 0) {
-      await PerCampaignModel.updateOne(
-        { recipientId, type: "sent" },
-        { $inc: { openCount: 1 } }
-      );
+      if (sentRow && (!sentRow.openCount || sentRow.openCount === 0)) {
+        await PerCampaignModel.updateOne(
+          { recipientId, type: "sent" },
+          { $inc: { openCount: 1 } }
+        );
+      }
 
       const Campaign = campaignConn.model(
         "Campaign",
         new mongoose.Schema({}, { strict: false }),
         "Campaign"
       );
-      await Campaign.updateOne(
-        { emailId },
-        { $inc: { totalOpened: 1 } }
-      );
+      await Campaign.updateOne({ emailId }, { $inc: { totalOpened: 1 } });
+    } catch (err) {
+      // don't throw — keep logging but avoid breaking the request
+      console.error("Error while applying first-open increments:", err);
     }
   }
 }
@@ -230,27 +244,55 @@ router.get("/track-pixel", async (req, res) => {
 //   res.redirect(target);
 // });
 
-
 router.get("/track-click", async (req, res) => {
   const { emailId, recipientId, redirect } = req.query;
 
   try {
+    // Always record the click first
     await logEvent(req, "click");
 
+    // If we have campaign + recipient, ensure open exists (click implies open)
     if (emailId && recipientId) {
-      const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
-      const sentRow = await PerCampaignModel.findOne({ recipientId, type: "sent" });
+      // Check global Log collection for an 'open' record
+      const openLog = await Log.findOne({ emailId, recipientId, type: "open" });
 
-      if (sentRow && sentRow.openCount === 0) {
+      if (!openLog) {
+        // No open recorded — treat this click as the first open
         await logEvent(req, "open");
-        console.log(`📩 No opens yet — logged open via click for ${recipientId}`);
+        console.log(
+          `📩 Click recorded as open for recipient=${recipientId} campaign=${emailId}`
+        );
+      } else if (openLog.count === 0) {
+        // Safety: if an open doc exists but count is 0 (edge case), increment it
+        await Log.updateOne(
+          { emailId, recipientId, type: "open" },
+          { $inc: { count: 1 }, $set: { timestamp: new Date() } }
+        );
+
+        // Also ensure per-campaign "sent" row + Campaign totals reflect this first open
+        const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
+        const sentRow = await PerCampaignModel.findOne({ recipientId, type: "sent" });
+        if (sentRow && (!sentRow.openCount || sentRow.openCount === 0)) {
+          await PerCampaignModel.updateOne(
+            { recipientId, type: "sent" },
+            { $inc: { openCount: 1 } }
+          );
+          const Campaign = campaignConn.model(
+            "Campaign",
+            new mongoose.Schema({}, { strict: false }),
+            "Campaign"
+          );
+          await Campaign.updateOne({ emailId }, { $inc: { totalOpened: 1 } });
+        }
       }
     }
 
-    res.redirect(redirect || "https://demandmediabpm.com/");
+    const target = redirect || "https://demandmediabpm.com/";
+    return res.redirect(target);
   } catch (err) {
     console.error("❌ Error in /track-click:", err);
-    res.redirect(redirect || "https://demandmediabpm.com/");
+    // fallback redirect
+    return res.redirect(redirect || "https://demandmediabpm.com/");
   }
 });
 

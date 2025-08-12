@@ -362,9 +362,13 @@ async function sendCampaignNow({ emailId, subject, body, style, listName, redire
   );
 
   // Batch config
-  const BATCH_SIZE = parseInt(process.env.CAMPAIGN_BATCH_SIZE || "100", 10);
-  const BATCH_DELAY_MS = parseInt(process.env.CAMPAIGN_BATCH_DELAY_MS || "30000", 10); // 5 sec delay
-  const CONCURRENCY = parseInt(process.env.CAMPAIGN_CONCURRENCY || "10", 10); // parallel sends in a batch
+  // const BATCH_SIZE = parseInt(process.env.CAMPAIGN_BATCH_SIZE || "100", 10);
+  // const BATCH_DELAY_MS = parseInt(process.env.CAMPAIGN_BATCH_DELAY_MS || "30000", 10); // 30 sec delay
+  // const CONCURRENCY = parseInt(process.env.CAMPAIGN_CONCURRENCY || "10", 10); // parallel sends in a batch
+
+  const BATCH_SIZE = parseInt(process.env.CAMPAIGN_BATCH_SIZE || "4", 10);
+  const BATCH_DELAY_MS = parseInt(process.env.CAMPAIGN_BATCH_DELAY_MS || "30000", 10); // 30 sec delay
+  const CONCURRENCY = parseInt(process.env.CAMPAIGN_CONCURRENCY || "2", 10); // parallel sends in a batch
 
   // Helpers
   function chunkArray(arr, size) {

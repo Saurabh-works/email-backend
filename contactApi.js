@@ -39,6 +39,7 @@ router.post("/upload-contact", upload.single("file"), async (req, res) => {
         Email: String,
         ContactNo: String,
         JobTitle: String,
+        CompanyName: String,
         LinkdinLink: String,
         createdAt: { type: Date, default: Date.now },
       }),

@@ -287,6 +287,50 @@ router.get("/track-click", async (req, res) => {
       }
     }
 
+
+    // 📧 Send thank-you mail
+    //   try {
+    //     // Find the campaign document to get the listName
+    //     const Campaign = campaignConn.model("Campaign", new mongoose.Schema({}, { strict: false }), "Campaign");
+    //     const campaignDoc = await Campaign.findOne({ emailId });
+    //     let listName = campaignDoc?.listName; // store listName in Campaign when creating campaign
+
+    //     if (listName) {
+    //       // Fetch FirstName from contact list
+    //       const ContactModel = contactConn.model(listName, new mongoose.Schema({}, { strict: false }), listName);
+    //       const contact = await ContactModel.findOne({ Email: recipientId });
+
+    //       const firstName = contact?.FirstName || "there";
+
+    //       const thankYouBody = `
+    //         <!DOCTYPE html>
+    //         <html>
+    //           <body>
+    //             <p>Hi ${firstName},</p>
+    //             <p>Thank you for clicking our email. We appreciate your interest!</p>
+    //           </body>
+    //         </html>
+    //       `;
+
+    //       const params = {
+    //         Destination: { ToAddresses: [recipientId] },
+    //         Message: {
+    //           Body: { Html: { Charset: "UTF-8", Data: thankYouBody } },
+    //           Subject: { Charset: "UTF-8", Data: "Thank you for your interest" },
+    //         },
+    //         Source: process.env.FROM_EMAIL,
+    //       };
+
+    //       await sesClient.send(new SendEmailCommand(params));
+    //       console.log(`✅ Sent thank-you email to ${recipientId}`);
+    //     } else {
+    //       console.warn(`⚠️ No listName found for campaign ${emailId}, cannot send thank-you email`);
+    //     }
+    //   } catch (err) {
+    //     console.error(`❌ Failed to send thank-you email to ${recipientId}:`, err);
+    //   }
+    // }
+
     const target = redirect || "https://demandmediabpm.com/";
     return res.redirect(target);
   } catch (err) {

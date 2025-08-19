@@ -415,6 +415,7 @@ async function sendCampaignNow({
         recipientId: Email,
         type: "sent",
         timestamp: new Date(),
+        sendAt: new Date(),
         count: 0,
         ip: "NA",
         city: "NA",
@@ -438,6 +439,7 @@ async function sendCampaignNow({
         recipientId: Email,
         type: "sent",
         timestamp: new Date(),
+        sendAt: new Date(),
         count: 0,
         bounceStatus: "NA",
       })),
@@ -515,6 +517,20 @@ async function sendCampaignNow({
             recipientId: to,
             timestamp: new Date(),
           });
+
+          const exactSendTime = new Date();
+          await Promise.all([
+            Log.updateOne(
+              { emailId, recipientId: to, type: "sent" },
+              { $set: { sendAt: exactSendTime } }
+            ),
+            campaignConn
+              .collection(emailId)
+              .updateOne(
+                { emailId, recipientId: to, type: "sent" },
+                { $set: { sendAt: exactSendTime } }
+              ),
+          ]);
 
           campaignProgress[emailId].sent += 1;
           await Campaign.updateOne(

@@ -24,6 +24,7 @@ const logSchema = new mongoose.Schema({
   type: String,
   count: { type: Number, default: 1 },
   timestamp: Date,
+  // smtpSentAt: Date,
   ip: String,
   city: String,
   region: String,
@@ -56,7 +57,6 @@ function getRealIp(req) {
 
 const isBot = (ua) => /bot|crawler|preview|headless/i.test(ua);
 
-
 async function logEvent(req, type) {
   const ip = getRealIp(req);
   const ua = req.headers["user-agent"] || "";
@@ -69,7 +69,13 @@ async function logEvent(req, type) {
   // ✅ Add this block here
   if (type === "open") {
     // Check if open happens too soon after "sent"
-    const sentRow = await Log.findOne({ emailId, recipientId, type: "sent" });
+    // const sentRow = await Log.findOne({ emailId, recipientId, type: "sent" });
+    const sentRow = await Log.findOne(
+      { emailId, recipientId, type: "sent" },
+      {},
+      { sort: { timestamp: -1 } } // ✅ ensures most recent send
+    );
+
     if (sentRow && Date.now() - new Date(sentRow.timestamp).getTime() < 5000) {
       console.log(
         `⚠️ Ignoring bot-like open for ${recipientId} (too soon after delivery)`
@@ -197,7 +203,6 @@ router.get("/track-pixel", async (req, res) => {
   });
   res.end(pixel);
 });
-
 
 router.get("/track-click", async (req, res) => {
   const { emailId, recipientId, redirect } = req.query;
@@ -1078,7 +1083,6 @@ router.get("/campaign-csv", async (req, res) => {
   }
 });
 
-
 router.get("/myip", (req, res) => {
   const realIp =
     req.headers["x-real-ip"] || req.headers["x-forwarded-for"] || req.ip;
@@ -1090,6 +1094,5 @@ router.get("/myip", (req, res) => {
     headers: req.headers,
   });
 });
-
 
 module.exports = router;

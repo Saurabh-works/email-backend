@@ -918,10 +918,13 @@ router.get("/campaign-details", async (req, res) => {
         totalOpen: 0,
         totalClick: 0,
         lastClick: "NA",
+        sendAt: "NA",
         bounceStatus: false,
         unsubscribe: false,
       };
     }
+    if (log.type === "sent") details[r].sendAt = log.sendAt || "NA";
+
     if (log.type === "open") details[r].totalOpen += log.count;
     if (log.type === "click") {
       details[r].totalClick += log.count;

@@ -2,7 +2,15 @@ const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
 
-// Schema & Model
+// Connect to your specific "contact" database
+const MONGO_URI = process.env.MONGO_URI_CONTACT;
+
+const conn = mongoose.createConnection(MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+// Schema & Model using the dedicated connection
 const blockListSchema = new mongoose.Schema({
   FirstName: String,
   LastName: String,
@@ -10,11 +18,13 @@ const blockListSchema = new mongoose.Schema({
   ContactNo: String,
   JobTitle: String,
   CompanyName: String,
+  CampaignId: String,
   LinkedinLink: String,
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
 });
 
-const BlockList = mongoose.model("BlockList", blockListSchema, "BlockList");
+// Use conn.model instead of mongoose.model to ensure it's in "contact" DB
+const BlockList = conn.model("BlockList", blockListSchema, "BlockList");
 
 // Add new blocked contact
 router.post("/upload", async (req, res) => {

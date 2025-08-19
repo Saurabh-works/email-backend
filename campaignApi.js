@@ -24,7 +24,7 @@ const logSchema = new mongoose.Schema({
   type: String,
   count: { type: Number, default: 1 },
   timestamp: Date,
-  // smtpSentAt: Date,
+  sendAt: { type: Date },
   ip: String,
   city: String,
   region: String,
@@ -135,6 +135,11 @@ async function logEvent(req, type) {
   // Prevent accidental bounceStatus overwrite on open/click/unsubscribe
   if (type !== "sent") {
     delete updateData.$set.bounceStatus;
+  }
+
+  // ✅ Only when type === "sent", add a permanent sendAt
+  if (type === "sent") {
+    updateData.$setOnInsert = { sendAt: new Date() };
   }
 
   // If this is an 'open' event, check whether an open already exists (so we can detect "first open")

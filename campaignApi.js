@@ -521,13 +521,13 @@ async function sendCampaignNow({
           const exactSendTime = new Date();
           await Promise.all([
             Log.updateOne(
-              { emailId, recipientId: to, type: "sent" },
+              { emailId, recipientId: { $regex: `^${to}$`, $options: "i" }, type: "sent" },
               { $set: { sendAt: exactSendTime } }
             ),
             campaignConn
               .collection(emailId)
               .updateOne(
-                { emailId, recipientId: to, type: "sent" },
+                { emailId, recipientId: { $regex: `^${to}$`, $options: "i" }, type: "sent" },
                 { $set: { sendAt: exactSendTime } }
               ),
           ]);

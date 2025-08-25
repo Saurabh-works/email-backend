@@ -824,7 +824,7 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
     // Handle bounce or delivery notifications
     if (message.Type === "Notification") {
       const payload = JSON.parse(message.Message);
-      console.log("📩 Full SES payload:", JSON.stringify(payload, null, 2));
+      // console.log("📩 Full SES payload:", JSON.stringify(payload, null, 2));
 
       if (
         payload.notificationType === "Bounce" ||

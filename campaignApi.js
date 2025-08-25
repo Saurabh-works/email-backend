@@ -662,6 +662,7 @@ router.post("/send-campaign", async (req, res) => {
         );
 
         await sendCampaignNow({
+          campaignId: newCampaign._id, // 👈 important
           emailId,
           subject,
           body,
@@ -676,11 +677,15 @@ router.post("/send-campaign", async (req, res) => {
         );
       });
 
-      return res.json({ message: `Campaign scheduled for ${scheduleTime}` });
+      return res.json({
+        message: `Campaign scheduled for ${scheduleTime}`,
+        campaignId: newCampaign._id,
+      });
     }
 
     // 🔹 Immediate send
     await sendCampaignNow({
+      campaignId: newCampaign._id, // 👈 important
       emailId,
       subject,
       body,
@@ -694,7 +699,10 @@ router.post("/send-campaign", async (req, res) => {
       { $set: { status: "completed" } }
     );
 
-    return res.json({ message: `Campaign ${emailId} sent immediately` });
+    return res.json({
+      message: `Campaign ${emailId} sent immediately`,
+      campaignId: newCampaign._id,
+    });
   } catch (err) {
     console.error("❌ /send-campaign error:", err);
     res.status(500).json({ error: "Failed to send campaign" });

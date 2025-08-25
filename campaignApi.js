@@ -11,7 +11,7 @@ const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
 // const { validateSMTP } = require("./smtpValidator");
 const juice = require("juice");
 // const cron = require('node-cron');
-// const schedule = require("node-schedule");
+const schedule = require("node-schedule");
 
 const router = express.Router();
 
@@ -599,7 +599,7 @@ async function sendCampaignNow({
   }
 }
 
-// // Main route with scheduling
+// // // Main route with scheduling
 // router.post("/send-campaign", async (req, res) => {
 //   const { emailId, subject, body, style, listName, redirectUrl, scheduleTime } =
 //     req.body;
@@ -644,56 +644,59 @@ async function sendCampaignNow({
 //       scheduleTime: scheduleTime ? new Date(scheduleTime) : null,
 //     });
 
-//     // if (status === "scheduled") {
-//     //   schedule.scheduleJob(new Date(scheduleTime), async () => {
-//     //     console.log(`⏰ Running scheduled campaign: ${emailId}`);
-//     //     await sendCampaignNow({
-//     //       emailId,
-//     //       subject,
-//     //       body,
-//     //       style,
-//     //       listName,
-//     //       redirectUrl,
-//     //     });
-//     //   });
+//     if (status === "scheduled") {
+//       schedule.scheduleJob(new Date(scheduleTime), async () => {
+//         console.log(`⏰ Running scheduled campaign: ${emailId}`);
+//         await sendCampaignNow({
+//           emailId,
+//           subject,
+//           body,
+//           style,
+//           listName,
+//           redirectUrl,
+//         });
+//       });
 
-//     //   return res.json({ message: `Campaign scheduled for ${scheduleTime}` });
-//     // }
+//       return res.json({ message: `Campaign scheduled for ${scheduleTime}` });
+//     }
 
-//     // await sendCampaignNow({
-//     //   emailId,
-//     //   subject,
-//     //   body,
-//     //   style,
-//     //   listName,
-//     //   redirectUrl,
-//     // });
-//     // return res.json({ message: `Campaign ${emailId} sent immediately` });
+//     await sendCampaignNow({
+//       emailId,
+//       subject,
+//       body,
+//       style,
+//       listName,
+//       redirectUrl,
+//     });
+//     return res.json({ message: `Campaign ${emailId} sent immediately` });
 //   } catch (err) {
 //     console.error("❌ /send-campaign error:", err);
 //     res.status(500).json({ error: "Failed to send campaign" });
 //   }
 // });
 
+
 // Main route with scheduling
 router.post("/send-campaign", async (req, res) => {
   const { emailId, subject, body, style, listName, redirectUrl, scheduleTime } =
     req.body;
-
-  if (!emailId || !subject || !body || !listName) {
+  if (!emailId || !subject || !body || !listName)
     return res.status(400).json({ error: "Missing fields" });
-  }
 
   const campaignSchema = new mongoose.Schema(
     {
       emailId: String,
       subject: String,
+      body: String,
+      style: String,
+      listName: String,
+      redirectUrl: String,
       totalSent: Number,
       totalBounced: Number,
       totalOpened: Number,
       totalClicked: Number,
       totalUnsubscribed: Number,
-      status: String,
+      status: String, // scheduled | running | completed
       createdAt: Date,
       scheduleTime: Date,
     },
@@ -703,98 +706,198 @@ router.post("/send-campaign", async (req, res) => {
   const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
 
   try {
-    // const status =
-    //   scheduleTime && new Date(scheduleTime) > new Date()
-    //     ? "scheduled"
-    //     : "pending";
-
-    const status = scheduleTime ? "scheduled" : "pending";
+    const isScheduled =
+      scheduleTime && new Date(scheduleTime) > new Date();
 
     const newCampaign = await Campaign.create({
       emailId,
       subject,
+      body,
+      style,
+      listName,
       redirectUrl,
       totalSent: 0,
       totalBounced: 0,
       totalOpened: 0,
       totalClicked: 0,
       totalUnsubscribed: 0,
-      status,
+      status: isScheduled ? "scheduled" : "running",
       createdAt: new Date(),
-      scheduleTime: scheduleTime ? new Date(scheduleTime) : null,
+      scheduleTime: isScheduled ? new Date(scheduleTime) : null,
+    });
+
+    // 🔹 If scheduled, use node-schedule for precise timing
+    if (isScheduled) {
+      schedule.scheduleJob(new Date(scheduleTime), async () => {
+        console.log(`⏰ Running scheduled campaign: ${emailId}`);
+
+        await Campaign.updateOne(
+          { _id: newCampaign._id },
+          { $set: { status: "running" } }
+        );
+
+        await sendCampaignNow({
+          emailId,
+          subject,
+          body,
+          style,
+          listName,
+          redirectUrl,
+        });
+
+        await Campaign.updateOne(
+          { _id: newCampaign._id },
+          { $set: { status: "completed" } }
+        );
+      });
+
+      return res.json({ message: `Campaign scheduled for ${scheduleTime}` });
+    }
+
+    // 🔹 Immediate send
+    await sendCampaignNow({
+      emailId,
+      subject,
       body,
       style,
       listName,
+      redirectUrl,
     });
 
-    if (status === "scheduled") {
-      // ✅ Only save to DB, let the global cron pick it up
-      return res.json({
-        message: `Campaign scheduled for ${scheduleTime}`,
-        campaignId: newCampaign._id,
-      });
-    } else {
-      // ✅ Immediate send
-      await sendCampaignNow({
-        emailId,
-        subject,
-        body,
-        style,
-        listName,
-        redirectUrl,
-      });
+    await Campaign.updateOne(
+      { _id: newCampaign._id },
+      { $set: { status: "completed" } }
+    );
 
-      newCampaign.status = "sent"; // mark as sent
-      await newCampaign.save();
-
-      return res.json({
-        message: `Campaign ${emailId} sent immediately`,
-        campaignId: newCampaign._id,
-      });
-    }
+    return res.json({ message: `Campaign ${emailId} sent immediately` });
   } catch (err) {
     console.error("❌ /send-campaign error:", err);
     res.status(500).json({ error: "Failed to send campaign" });
   }
 });
 
-cron.schedule("* * * * * *", async () => {
-  const now = new Date();
 
-  const Campaign = campaignConn.model(
-    "Campaign",
-    new mongoose.Schema({}, { strict: false }),
-    "Campaign"
-  );
 
-  const dueCampaigns = await Campaign.find({
-    status: "scheduled",
-    scheduleTime: { $lte: now },
-  });
+// Main route with scheduling
+// router.post("/send-campaign", async (req, res) => {
+//   const { emailId, subject, body, style, listName, redirectUrl, scheduleTime } =
+//     req.body;
 
-  for (const c of dueCampaigns) {
-    console.log(
-      `⏰ Running scheduled campaign: ${c.emailId} at ${now.toISOString()}`
-    );
+//   if (!emailId || !subject || !body || !listName) {
+//     return res.status(400).json({ error: "Missing fields" });
+//   }
 
-    // mark as running first
-    c.status = "running";
-    await c.save();
+//   const campaignSchema = new mongoose.Schema(
+//     {
+//       emailId: String,
+//       subject: String,
+//       totalSent: Number,
+//       totalBounced: Number,
+//       totalOpened: Number,
+//       totalClicked: Number,
+//       totalUnsubscribed: Number,
+//       status: String,
+//       createdAt: Date,
+//       scheduleTime: Date,
+//     },
+//     { strict: false }
+//   );
 
-    await sendCampaignNow({
-      emailId: c.emailId,
-      subject: c.subject,
-      body: c.body,
-      style: c.style,
-      listName: c.listName,
-      redirectUrl: c.redirectUrl,
-    });
+//   const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
 
-    // once done, mark as completed
-    c.status = "completed";
-    await c.save();
-  }
-});
+//   try {
+//     // const status =
+//     //   scheduleTime && new Date(scheduleTime) > new Date()
+//     //     ? "scheduled"
+//     //     : "pending";
+
+//     const status = scheduleTime ? "scheduled" : "pending";
+
+//     const newCampaign = await Campaign.create({
+//       emailId,
+//       subject,
+//       redirectUrl,
+//       totalSent: 0,
+//       totalBounced: 0,
+//       totalOpened: 0,
+//       totalClicked: 0,
+//       totalUnsubscribed: 0,
+//       status,
+//       createdAt: new Date(),
+//       scheduleTime: scheduleTime ? new Date(scheduleTime) : null,
+//       body,
+//       style,
+//       listName,
+//     });
+
+//     if (status === "scheduled") {
+//       // ✅ Only save to DB, let the global cron pick it up
+//       return res.json({
+//         message: `Campaign scheduled for ${scheduleTime}`,
+//         campaignId: newCampaign._id,
+//       });
+//     } else {
+//       // ✅ Immediate send
+//       await sendCampaignNow({
+//         emailId,
+//         subject,
+//         body,
+//         style,
+//         listName,
+//         redirectUrl,
+//       });
+
+//       newCampaign.status = "sent"; // mark as sent
+//       await newCampaign.save();
+
+//       return res.json({
+//         message: `Campaign ${emailId} sent immediately`,
+//         campaignId: newCampaign._id,
+//       });
+//     }
+//   } catch (err) {
+//     console.error("❌ /send-campaign error:", err);
+//     res.status(500).json({ error: "Failed to send campaign" });
+//   }
+// });
+
+// cron.schedule("* * * * * *", async () => {
+//   const now = new Date();
+
+//   const Campaign = campaignConn.model(
+//     "Campaign",
+//     new mongoose.Schema({}, { strict: false }),
+//     "Campaign"
+//   );
+
+//   const dueCampaigns = await Campaign.find({
+//     status: "scheduled",
+//     scheduleTime: { $lte: now },
+//   });
+
+//   for (const c of dueCampaigns) {
+//     console.log(
+//       `⏰ Running scheduled campaign: ${c.emailId} at ${now.toISOString()}`
+//     );
+
+//     // mark as running first
+//     c.status = "running";
+//     await c.save();
+
+//     await sendCampaignNow({
+//       emailId: c.emailId,
+//       subject: c.subject,
+//       body: c.body,
+//       style: c.style,
+//       listName: c.listName,
+//       redirectUrl: c.redirectUrl,
+//     });
+
+//     // once done, mark as completed
+//     c.status = "completed";
+//     await c.save();
+//   }
+// });
 
 // Add at the top
 // const progressMap = {}; // { emailId: { sent: 0, total: 0 } }

@@ -764,7 +764,7 @@ router.post("/mark-bounce", async (req, res) => {
     if (!collections.some((c) => c.name === emailId)) {
       console.warn(`Collection ${emailId} does NOT exist`);
       // Optionally: return here if you want strict check
-      // return res.status(404).json({ error: "Campaign collection not found" });
+      return res.status(404).json({ error: "Campaign collection not found" });
     }
 
     // Check if recipient exists in campaign collection (case insensitive)
@@ -776,7 +776,7 @@ router.post("/mark-bounce", async (req, res) => {
         `No matching document found in ${emailId} for recipientId ${recipientId}`
       );
       // Optional: return here if you want strict check
-      // return res.status(404).json({ error: "Recipient not found in campaign" });
+      return res.status(404).json({ error: "Recipient not found in campaign" });
     }
 
     const logResult = await Log.updateMany(
@@ -824,7 +824,7 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
     // Handle bounce or delivery notifications
     if (message.Type === "Notification") {
       const payload = JSON.parse(message.Message);
-      // console.log("📩 Full SES payload:", JSON.stringify(payload, null, 2));
+      console.log("📩 Full SES payload:", JSON.stringify(payload, null, 2));
 
       if (
         payload.notificationType === "Bounce" ||

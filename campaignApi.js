@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
+const cron = require("node-cron");
 // const AWS = require('aws-sdk');
 // AWS.config.update({ region: process.env.FORCE_SES_REGION || 'us-east-1' });
 const requestIp = require("request-ip");
@@ -10,7 +11,7 @@ const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
 // const { validateSMTP } = require("./smtpValidator");
 const juice = require("juice");
 // const cron = require('node-cron');
-const schedule = require("node-schedule");
+// const schedule = require("node-schedule");
 
 const router = express.Router();
 
@@ -521,13 +522,21 @@ async function sendCampaignNow({
           const exactSendTime = new Date();
           await Promise.all([
             Log.updateOne(
-              { emailId, recipientId: { $regex: `^${to}$`, $options: "i" }, type: "sent" },
+              {
+                emailId,
+                recipientId: { $regex: `^${to}$`, $options: "i" },
+                type: "sent",
+              },
               { $set: { sendAt: exactSendTime } }
             ),
             campaignConn
               .collection(emailId)
               .updateOne(
-                { emailId, recipientId: { $regex: `^${to}$`, $options: "i" }, type: "sent" },
+                {
+                  emailId,
+                  recipientId: { $regex: `^${to}$`, $options: "i" },
+                  type: "sent",
+                },
                 { $set: { sendAt: exactSendTime } }
               ),
           ]);
@@ -637,21 +646,21 @@ router.post("/send-campaign", async (req, res) => {
       scheduleTime: scheduleTime ? new Date(scheduleTime) : null,
     });
 
-    if (status === "scheduled") {
-      schedule.scheduleJob(new Date(scheduleTime), async () => {
-        console.log(`⏰ Running scheduled campaign: ${emailId}`);
-        await sendCampaignNow({
-          emailId,
-          subject,
-          body,
-          style,
-          listName,
-          redirectUrl,
-        });
-      });
+    // if (status === "scheduled") {
+    //   schedule.scheduleJob(new Date(scheduleTime), async () => {
+    //     console.log(`⏰ Running scheduled campaign: ${emailId}`);
+    //     await sendCampaignNow({
+    //       emailId,
+    //       subject,
+    //       body,
+    //       style,
+    //       listName,
+    //       redirectUrl,
+    //     });
+    //   });
 
-      return res.json({ message: `Campaign scheduled for ${scheduleTime}` });
-    }
+    //   return res.json({ message: `Campaign scheduled for ${scheduleTime}` });
+    // }
 
     await sendCampaignNow({
       emailId,
@@ -665,6 +674,37 @@ router.post("/send-campaign", async (req, res) => {
   } catch (err) {
     console.error("❌ /send-campaign error:", err);
     res.status(500).json({ error: "Failed to send campaign" });
+  }
+});
+
+cron.schedule("* * * * * *", async () => {
+  const now = new Date();
+
+  const Campaign = campaignConn.model(
+    "Campaign",
+    new mongoose.Schema({}, { strict: false }),
+    "Campaign"
+  );
+
+  const dueCampaigns = await Campaign.find({
+    status: "scheduled",
+    scheduleTime: { $lte: now },
+  });
+
+  for (const c of dueCampaigns) {
+    console.log(
+      `⏰ Running scheduled campaign: ${c.emailId} at ${now.toISOString()}`
+    );
+    await sendCampaignNow({
+      emailId: c.emailId,
+      subject: c.subject,
+      body: c.body,
+      style: c.style,
+      listName: c.listName,
+      redirectUrl: c.redirectUrl,
+    });
+    c.status = "pending"; // or "sent" if you want to mark done immediately
+    await c.save();
   }
 });
 

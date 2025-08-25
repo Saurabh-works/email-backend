@@ -774,6 +774,11 @@ cron.schedule("* * * * * *", async () => {
     console.log(
       `⏰ Running scheduled campaign: ${c.emailId} at ${now.toISOString()}`
     );
+
+    // mark as running first
+    c.status = "running";
+    await c.save();
+
     await sendCampaignNow({
       emailId: c.emailId,
       subject: c.subject,
@@ -782,7 +787,9 @@ cron.schedule("* * * * * *", async () => {
       listName: c.listName,
       redirectUrl: c.redirectUrl,
     });
-    c.status = "pending"; // or "sent" if you want to mark done immediately
+
+    // once done, mark as completed
+    c.status = "completed";
     await c.save();
   }
 });

@@ -703,10 +703,12 @@ router.post("/send-campaign", async (req, res) => {
   const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
 
   try {
-    const status =
-      scheduleTime && new Date(scheduleTime) > new Date()
-        ? "scheduled"
-        : "pending";
+    // const status =
+    //   scheduleTime && new Date(scheduleTime) > new Date()
+    //     ? "scheduled"
+    //     : "pending";
+
+    const status = scheduleTime ? "scheduled" : "pending";
 
     const newCampaign = await Campaign.create({
       emailId,

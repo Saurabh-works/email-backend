@@ -529,16 +529,14 @@ async function sendCampaignNow({
               },
               { $set: { sendAt: exactSendTime } }
             ),
-            campaignConn
-              .collection(emailId)
-              .updateOne(
-                {
-                  emailId,
-                  recipientId: { $regex: `^${to}$`, $options: "i" },
-                  type: "sent",
-                },
-                { $set: { sendAt: exactSendTime } }
-              ),
+            campaignConn.collection(emailId).updateOne(
+              {
+                emailId,
+                recipientId: { $regex: `^${to}$`, $options: "i" },
+                type: "sent",
+              },
+              { $set: { sendAt: exactSendTime } }
+            ),
           ]);
 
           campaignProgress[emailId].sent += 1;
@@ -601,12 +599,90 @@ async function sendCampaignNow({
   }
 }
 
+// // Main route with scheduling
+// router.post("/send-campaign", async (req, res) => {
+//   const { emailId, subject, body, style, listName, redirectUrl, scheduleTime } =
+//     req.body;
+//   if (!emailId || !subject || !body || !listName)
+//     return res.status(400).json({ error: "Missing fields" });
+
+//   const campaignSchema = new mongoose.Schema(
+//     {
+//       emailId: String,
+//       subject: String,
+//       totalSent: Number,
+//       totalBounced: Number,
+//       totalOpened: Number,
+//       totalClicked: Number,
+//       totalUnsubscribed: Number,
+//       status: String,
+//       createdAt: Date,
+//       scheduleTime: Date,
+//     },
+//     { strict: false }
+//   );
+
+//   const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
+
+//   try {
+//     const status =
+//       scheduleTime && new Date(scheduleTime) > new Date()
+//         ? "scheduled"
+//         : "pending";
+
+//     await Campaign.create({
+//       emailId,
+//       subject,
+//       redirectUrl,
+//       totalSent: 0,
+//       totalBounced: 0,
+//       totalOpened: 0,
+//       totalClicked: 0,
+//       totalUnsubscribed: 0,
+//       status,
+//       createdAt: new Date(),
+//       scheduleTime: scheduleTime ? new Date(scheduleTime) : null,
+//     });
+
+//     // if (status === "scheduled") {
+//     //   schedule.scheduleJob(new Date(scheduleTime), async () => {
+//     //     console.log(`⏰ Running scheduled campaign: ${emailId}`);
+//     //     await sendCampaignNow({
+//     //       emailId,
+//     //       subject,
+//     //       body,
+//     //       style,
+//     //       listName,
+//     //       redirectUrl,
+//     //     });
+//     //   });
+
+//     //   return res.json({ message: `Campaign scheduled for ${scheduleTime}` });
+//     // }
+
+//     // await sendCampaignNow({
+//     //   emailId,
+//     //   subject,
+//     //   body,
+//     //   style,
+//     //   listName,
+//     //   redirectUrl,
+//     // });
+//     // return res.json({ message: `Campaign ${emailId} sent immediately` });
+//   } catch (err) {
+//     console.error("❌ /send-campaign error:", err);
+//     res.status(500).json({ error: "Failed to send campaign" });
+//   }
+// });
+
 // Main route with scheduling
 router.post("/send-campaign", async (req, res) => {
   const { emailId, subject, body, style, listName, redirectUrl, scheduleTime } =
     req.body;
-  if (!emailId || !subject || !body || !listName)
+
+  if (!emailId || !subject || !body || !listName) {
     return res.status(400).json({ error: "Missing fields" });
+  }
 
   const campaignSchema = new mongoose.Schema(
     {
@@ -632,7 +708,7 @@ router.post("/send-campaign", async (req, res) => {
         ? "scheduled"
         : "pending";
 
-    await Campaign.create({
+    const newCampaign = await Campaign.create({
       emailId,
       subject,
       redirectUrl,
@@ -644,33 +720,36 @@ router.post("/send-campaign", async (req, res) => {
       status,
       createdAt: new Date(),
       scheduleTime: scheduleTime ? new Date(scheduleTime) : null,
-    });
-
-    // if (status === "scheduled") {
-    //   schedule.scheduleJob(new Date(scheduleTime), async () => {
-    //     console.log(`⏰ Running scheduled campaign: ${emailId}`);
-    //     await sendCampaignNow({
-    //       emailId,
-    //       subject,
-    //       body,
-    //       style,
-    //       listName,
-    //       redirectUrl,
-    //     });
-    //   });
-
-    //   return res.json({ message: `Campaign scheduled for ${scheduleTime}` });
-    // }
-
-    await sendCampaignNow({
-      emailId,
-      subject,
       body,
       style,
       listName,
-      redirectUrl,
     });
-    return res.json({ message: `Campaign ${emailId} sent immediately` });
+
+    if (status === "scheduled") {
+      // ✅ Only save to DB, let the global cron pick it up
+      return res.json({
+        message: `Campaign scheduled for ${scheduleTime}`,
+        campaignId: newCampaign._id,
+      });
+    } else {
+      // ✅ Immediate send
+      await sendCampaignNow({
+        emailId,
+        subject,
+        body,
+        style,
+        listName,
+        redirectUrl,
+      });
+
+      newCampaign.status = "sent"; // mark as sent
+      await newCampaign.save();
+
+      return res.json({
+        message: `Campaign ${emailId} sent immediately`,
+        campaignId: newCampaign._id,
+      });
+    }
   } catch (err) {
     console.error("❌ /send-campaign error:", err);
     res.status(500).json({ error: "Failed to send campaign" });

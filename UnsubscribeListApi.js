@@ -4,7 +4,7 @@ const router = express.Router();
 const mongoose = require("mongoose");
 
 // Use contact DB connection
-const contactConn = mongoose.createConnection(process.env.CONTACT_DB_URL, {
+const contactConn = mongoose.createConnection(process.env.MONGO_URI_CONTACT, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });

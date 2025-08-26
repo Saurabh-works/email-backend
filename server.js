@@ -38,6 +38,8 @@ const EmailLog = require("./models/EmailLog");
 const contactApi = require("./contactApi");
 const mailpreviewApi = require("./mailpreviewApi");
 const BlockListApi = require("./BlockListApi");
+const unsubscribeRoutes = require("./UnsubscribeListApi");
+
 // const requestIp = require('request-ip');
 
 
@@ -392,6 +394,8 @@ app.use("/api/campaign", campaignApi);
 app.use("/api/preview", mailpreviewApi);
 
 app.use("/api/blocklist", BlockListApi);
+
+app.use("/api/unsubscribelist", unsubscribeRoutes);
 
 // server.js or smtpValidator.js
 // module.exports = { validateSMTP, sessionClients };

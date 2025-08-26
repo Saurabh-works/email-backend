@@ -28,10 +28,13 @@ const unsubscribeSchema = new mongoose.Schema({
   CompanyName: String,
   CampaignName: String,
   LinkedIn: String,
-  UnsubscribeOn: { type: Date, default: Date.now }
+  UnsubscribeOn: { type: Date, default: Date.now },
 });
-const UnsubscribeList = contactConn.model("unsubscribelist", unsubscribeSchema, "unsubscribelist");
-
+const UnsubscribeList = contactConn.model(
+  "unsubscribelist",
+  unsubscribeSchema,
+  "unsubscribelist"
+);
 
 const logSchema = new mongoose.Schema({
   emailId: String,
@@ -48,7 +51,12 @@ const logSchema = new mongoose.Schema({
   browser: String,
   os: String,
   // bounceStatus: { type: Boolean, default: false },
-  bounceStatus: { type: String, enum: ["NA", "Yes", "No"], default: "NA" },
+  // bounceStatus: { type: String, enum: ["NA", "Yes", "No"], default: "NA" },
+  bounceStatus: {
+    type: String,
+    enum: ["NA", "hard", "soft", "no"],
+    default: "NA",
+  },
 });
 logSchema.index({ emailId: 1, recipientId: 1, type: 1 }, { unique: true });
 const Log = campaignConn.model("Log", logSchema);
@@ -793,16 +801,14 @@ router.post("/mark-bounce", async (req, res) => {
       // { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
       { emailId, recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
       // { $set: { bounceStatus: "Yes" } }
-      { $set: { bounceStatus: status  } }
+      { $set: { bounceStatus: status } }
     );
 
-    const campaignResult = await campaignConn
-      .collection(emailId)
-      .updateMany(
-        { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
-        // { $set: { bounceStatus: "Yes" } }
-        { $set: { bounceStatus: status } }
-      );
+    const campaignResult = await campaignConn.collection(emailId).updateMany(
+      { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
+      // { $set: { bounceStatus: "Yes" } }
+      { $set: { bounceStatus: status } }
+    );
 
     console.log(`Updated bounceStatus:
       Logs: ${logResult.modifiedCount}
@@ -857,7 +863,7 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
         }
 
         if (emailId && recipient) {
-          // const status = payload.notificationType === "Bounce" ? "Yes" : "No";       
+          // const status = payload.notificationType === "Bounce" ? "Yes" : "No";
           // const bounceType = payload.bounce?.bounceType; // "Permanent" | "Transient" | "Undetermined"
           // const status = bounceType === "Permanent" ? "hard" : "soft";
           let status;
@@ -888,7 +894,9 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
           //     status === "Yes" ? "Bounce" : "Delivery"
           //   } marked for ${recipient} in campaign ${emailId}`
           // );
-          console.log(`✅ ${status} marked for ${recipient} in campaign ${emailId}`);
+          console.log(
+            `✅ ${status} marked for ${recipient} in campaign ${emailId}`
+          );
         } else {
           console.warn(
             `⚠️ ${payload.notificationType} for ${recipient} but emailId missing. MessageId: ${messageId}`
@@ -1007,11 +1015,21 @@ router.get("/campaign-details", async (req, res) => {
       details[r].unsubscribe = true;
     }
 
+    // const status = sentStatuses[r] || "NA";
+    // if (status === "Yes") {
+    //   details[r].bounceStatus = "Yes";
+    // } else if (status === "No") {
+    //   details[r].bounceStatus = "No";
+    // } else {
+    //   details[r].bounceStatus = "NA";
+    // }
     const status = sentStatuses[r] || "NA";
-    if (status === "Yes") {
-      details[r].bounceStatus = "Yes";
-    } else if (status === "No") {
-      details[r].bounceStatus = "No";
+    if (["Yes", "hard"].includes(status)) {
+      details[r].bounceStatus = "hard"; // treat Yes as hard if legacy
+    } else if (status === "soft") {
+      details[r].bounceStatus = "soft";
+    } else if (["No", "no"].includes(status)) {
+      details[r].bounceStatus = "no";
     } else {
       details[r].bounceStatus = "NA";
     }
@@ -1057,14 +1075,22 @@ router.get("/track-unsubscribe", async (req, res) => {
     }
 
     // 1. Find Campaign (for CampaignName + listName)
-    const Campaign = campaignConn.model("Campaign", new mongoose.Schema({}, { strict: false }), "Campaign");
+    const Campaign = campaignConn.model(
+      "Campaign",
+      new mongoose.Schema({}, { strict: false }),
+      "Campaign"
+    );
     const campaignDoc = await Campaign.findOne({ emailId });
     const listName = campaignDoc?.listName;
     const campaignName = emailId;
 
     if (listName) {
       // 2. Find user in original contact list
-      const ContactModel = contactConn.model(listName, new mongoose.Schema({}, { strict: false }), listName);
+      const ContactModel = contactConn.model(
+        listName,
+        new mongoose.Schema({}, { strict: false }),
+        listName
+      );
       const contact = await ContactModel.findOne({ Email: recipientId });
 
       if (contact) {
@@ -1078,7 +1104,7 @@ router.get("/track-unsubscribe", async (req, res) => {
           CompanyName: contact.CompanyName || "",
           CampaignName: campaignName,
           LinkedIn: contact.LinkdinLink || "",
-          UnsubscribeOn: new Date()
+          UnsubscribeOn: new Date(),
         });
 
         // 4. Also update unsubscribed field in contact list if needed
@@ -1095,7 +1121,6 @@ router.get("/track-unsubscribe", async (req, res) => {
     res.status(500).send("Failed to unsubscribe");
   }
 });
-
 
 router.post("/send-test-mail", async (req, res) => {
   const { sender, receiver, subject, body, style } = req.body;

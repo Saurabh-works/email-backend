@@ -62,7 +62,7 @@ router.get("/lists", async (req, res) => {
     const results = [];
 
     for (const col of collections) {
-      if (col.name === "BlockList") continue;
+      if (col.name === "BlockList" || col.name === "unsubscribelist") continue;
       const Model = conn.model(col.name, new mongoose.Schema({}, { strict: false }), col.name);
       const count = await Model.countDocuments();
       const createdDoc = await Model.findOne().sort({ createdAt: 1 });

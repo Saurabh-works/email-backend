@@ -1060,7 +1060,7 @@ router.get("/track-unsubscribe", async (req, res) => {
     const Campaign = campaignConn.model("Campaign", new mongoose.Schema({}, { strict: false }), "Campaign");
     const campaignDoc = await Campaign.findOne({ emailId });
     const listName = campaignDoc?.listName;
-    const campaignName = campaignDoc?.subject || emailId;
+    const campaignName = emailId;
 
     if (listName) {
       // 2. Find user in original contact list
@@ -1077,7 +1077,7 @@ router.get("/track-unsubscribe", async (req, res) => {
           JobTitle: contact.JobTitle || "",
           CompanyName: contact.CompanyName || "",
           CampaignName: campaignName,
-          LinkedIn: contact.LinkedIn || "",
+          LinkedIn: contact.LinkdinLink || "",
           UnsubscribeOn: new Date()
         });
 

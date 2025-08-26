@@ -577,7 +577,7 @@ async function sendCampaignNow({
               type: "sent",
               recipientId: { $nin: interactedRecipients },
             },
-            { $set: { bounceStatus: "Yes" } }
+            { $set: { bounceStatus: "soft" } }
           ),
           campaignConn.collection(emailId).updateMany(
             {
@@ -585,7 +585,7 @@ async function sendCampaignNow({
               type: "sent",
               recipientId: { $nin: interactedRecipients },
             },
-            { $set: { bounceStatus: "Yes" } }
+            { $set: { bounceStatus: "soft" } }
           ),
         ]);
 
@@ -598,8 +598,6 @@ async function sendCampaignNow({
     console.error("❌ sendCampaignNow error:", err);
   }
 }
-
-
 
 // Main route with scheduling
 router.post("/send-campaign", async (req, res) => {
@@ -631,8 +629,7 @@ router.post("/send-campaign", async (req, res) => {
   const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
 
   try {
-    const isScheduled =
-      scheduleTime && new Date(scheduleTime) > new Date();
+    const isScheduled = scheduleTime && new Date(scheduleTime) > new Date();
 
     const newCampaign = await Campaign.create({
       emailId,
@@ -709,7 +706,6 @@ router.post("/send-campaign", async (req, res) => {
   }
 });
 
-
 // Add at the top
 // const progressMap = {}; // { emailId: { sent: 0, total: 0 } }
 
@@ -748,15 +744,15 @@ router.get("/send-campaign-progress", async (req, res) => {
 });
 
 router.post("/mark-bounce", async (req, res) => {
-  let { emailId, recipientId } = req.body;
+  let { emailId, recipientId, status } = req.body;
 
-  if (!emailId || !recipientId) {
+  if (!emailId || !recipientId || !status) {
     return res.status(400).json({ error: "Missing emailId or recipientId" });
   }
 
   try {
     console.log(
-      `Mark bounce requested for emailId='${emailId}', recipientId='${recipientId}'`
+      `Mark bounce requested for emailId='${emailId}', recipientId='${recipientId}', status='${status}'`
     );
 
     // Check if the campaign collection exists
@@ -780,15 +776,18 @@ router.post("/mark-bounce", async (req, res) => {
     }
 
     const logResult = await Log.updateMany(
-      { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
-      { $set: { bounceStatus: "Yes" } }
+      // { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
+      { emailId, recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
+      // { $set: { bounceStatus: "Yes" } }
+      { $set: { bounceStatus: status  } }
     );
 
     const campaignResult = await campaignConn
       .collection(emailId)
       .updateMany(
         { recipientId: { $regex: `^${recipientId}$`, $options: "i" } },
-        { $set: { bounceStatus: "Yes" } }
+        // { $set: { bounceStatus: "Yes" } }
+        { $set: { bounceStatus: status } }
       );
 
     console.log(`Updated bounceStatus:
@@ -844,7 +843,17 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
         }
 
         if (emailId && recipient) {
-          const status = payload.notificationType === "Bounce" ? "Yes" : "No";
+          // const status = payload.notificationType === "Bounce" ? "Yes" : "No";       
+          // const bounceType = payload.bounce?.bounceType; // "Permanent" | "Transient" | "Undetermined"
+          // const status = bounceType === "Permanent" ? "hard" : "soft";
+          let status;
+          if (payload.notificationType === "Bounce") {
+            const bounceType = payload.bounce?.bounceType; // Permanent | Transient | Undetermined
+            status = bounceType === "Permanent" ? "hard" : "soft";
+          } else if (payload.notificationType === "Delivery") {
+            status = "no"; // delivered
+          }
+
           await Promise.all([
             Log.updateMany(
               {
@@ -860,11 +869,12 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
                 { $set: { bounceStatus: status } }
               ),
           ]);
-          console.log(
-            `✅ ${
-              status === "Yes" ? "Bounce" : "Delivery"
-            } marked for ${recipient} in campaign ${emailId}`
-          );
+          // console.log(
+          //   `✅ ${
+          //     status === "Yes" ? "Bounce" : "Delivery"
+          //   } marked for ${recipient} in campaign ${emailId}`
+          // );
+          console.log(`✅ ${status} marked for ${recipient} in campaign ${emailId}`);
         } else {
           console.warn(
             `⚠️ ${payload.notificationType} for ${recipient} but emailId missing. MessageId: ${messageId}`

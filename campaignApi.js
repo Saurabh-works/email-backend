@@ -19,6 +19,20 @@ const router = express.Router();
 const contactConn = mongoose.createConnection(process.env.MONGO_URI_CONTACT);
 const campaignConn = mongoose.createConnection(process.env.CAMPAIGN_DB_URI);
 
+const unsubscribeSchema = new mongoose.Schema({
+  FirstName: String,
+  LastName: String,
+  Email: String,
+  ContactNo: String,
+  JobTitle: String,
+  CompanyName: String,
+  CampaignName: String,
+  LinkedIn: String,
+  UnsubscribeOn: { type: Date, default: Date.now }
+});
+const UnsubscribeList = contactConn.model("unsubscribelist", unsubscribeSchema, "unsubscribelist");
+
+
 const logSchema = new mongoose.Schema({
   emailId: String,
   recipientId: String,
@@ -1029,10 +1043,59 @@ router.get("/contact-lists", async (_, res) => {
   }
 });
 
+// router.get("/track-unsubscribe", async (req, res) => {
+//   await logEvent(req, "unsubscribe");
+//   res.send("You have been unsubscribed from this campaign.");
+// });
+
 router.get("/track-unsubscribe", async (req, res) => {
-  await logEvent(req, "unsubscribe");
-  res.send("You have been unsubscribed from this campaign.");
+  try {
+    await logEvent(req, "unsubscribe");
+    const { emailId, recipientId } = req.query;
+    if (!emailId || !recipientId) {
+      return res.status(400).send("Missing params");
+    }
+
+    // 1. Find Campaign (for CampaignName + listName)
+    const Campaign = campaignConn.model("Campaign", new mongoose.Schema({}, { strict: false }), "Campaign");
+    const campaignDoc = await Campaign.findOne({ emailId });
+    const listName = campaignDoc?.listName;
+    const campaignName = campaignDoc?.subject || emailId;
+
+    if (listName) {
+      // 2. Find user in original contact list
+      const ContactModel = contactConn.model(listName, new mongoose.Schema({}, { strict: false }), listName);
+      const contact = await ContactModel.findOne({ Email: recipientId });
+
+      if (contact) {
+        // 3. Insert into unsubscribelist
+        await UnsubscribeList.create({
+          FirstName: contact.FirstName || "",
+          LastName: contact.LastName || "",
+          Email: contact.Email,
+          ContactNo: contact.ContactNo || "",
+          JobTitle: contact.JobTitle || "",
+          CompanyName: contact.CompanyName || "",
+          CampaignName: campaignName,
+          LinkedIn: contact.LinkedIn || "",
+          UnsubscribeOn: new Date()
+        });
+
+        // 4. Also update unsubscribed field in contact list if needed
+        await ContactModel.updateOne(
+          { Email: recipientId },
+          { $set: { Unsubscribed: true, UnsubscribeOn: new Date() } }
+        );
+      }
+    }
+
+    res.send("You have been unsubscribed. ✅");
+  } catch (err) {
+    console.error("❌ Unsubscribe error:", err);
+    res.status(500).send("Failed to unsubscribe");
+  }
 });
+
 
 router.post("/send-test-mail", async (req, res) => {
   const { sender, receiver, subject, body, style } = req.body;

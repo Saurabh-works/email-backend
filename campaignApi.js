@@ -641,7 +641,9 @@ async function sendCampaignNow({
     );
 
     // ---- BATCHED SENDING ----
-    const batches = chunkArray(recipients, BATCH_SIZE);
+    // const batches = chunkArray(recipients, BATCH_SIZE);
+
+    const batches = chunkArray(actualRecipients, BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];

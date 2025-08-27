@@ -912,57 +912,128 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
   }
 });
 
+// router.get("/campaign-analytics", async (req, res) => {
+//   const { emailId } = req.query;
+
+//   const [opens, clicks, unsubscribes] = await Promise.all([
+//     Log.find({ emailId, type: "open" }),
+//     Log.find({ emailId, type: "click" }),
+//     Log.find({ emailId, type: "unsubscribe" }),
+//   ]);
+
+//   const campaignCollection = campaignConn.collection(emailId);
+//   // const recipients = await campaignCollection.distinct("recipientId");
+//   const resolvedRecipients = await campaignCollection.distinct("recipientId", {
+//     bounceStatus: { $in: ["Yes", "No"] },
+//   });
+
+//   const bounces = await campaignCollection.distinct("recipientId", {
+//     bounceStatus: "Yes",
+//   });
+
+//   const unsubscribeCount = unsubscribes.length;
+//   const uniqueOpens = opens.length;
+//   const totalOpens = opens.reduce((sum, o) => sum + o.count, 0);
+//   const uniqueClicks = clicks.length;
+//   const totalClicks = clicks.reduce((sum, c) => sum + c.count, 0);
+//   // const totalSent = recipients.length;
+//   const totalSent = resolvedRecipients.length;
+//   const openRate = totalSent ? (uniqueOpens / totalSent) * 100 : 0;
+//   const clickRate = totalSent ? (uniqueClicks / totalSent) * 100 : 0;
+//   const bounceRate = totalSent ? (bounces.length / totalSent) * 100 : 0;
+
+//   // 🔁 Replace lastActivity calculation with createdAt from Campaign model
+//   const campaignSchema = new mongoose.Schema({}, { strict: false });
+//   const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
+//   const campaign = await Campaign.findOne({ emailId });
+
+//   const lastActivity = campaign?.createdAt || null;
+
+//   res.json({
+//     emailId,
+//     totalSent,
+//     uniqueOpens,
+//     totalOpens,
+//     uniqueClicks,
+//     totalClicks,
+//     openRate,
+//     clickRate,
+//     bounceRate,
+//     unsubscribeCount,
+//     lastActivity,
+//   });
+// });
+
 router.get("/campaign-analytics", async (req, res) => {
-  const { emailId } = req.query;
+  try {
+    const { emailId } = req.query;
 
-  const [opens, clicks, unsubscribes] = await Promise.all([
-    Log.find({ emailId, type: "open" }),
-    Log.find({ emailId, type: "click" }),
-    Log.find({ emailId, type: "unsubscribe" }),
-  ]);
+    // Collect logs
+    const [opens, clicks, unsubscribes] = await Promise.all([
+      Log.find({ emailId, type: "open" }),
+      Log.find({ emailId, type: "click" }),
+      Log.find({ emailId, type: "unsubscribe" }),
+    ]);
 
-  const campaignCollection = campaignConn.collection(emailId);
-  // const recipients = await campaignCollection.distinct("recipientId");
-  const resolvedRecipients = await campaignCollection.distinct("recipientId", {
-    bounceStatus: { $in: ["Yes", "No"] },
-  });
+    // Reference campaign-specific collection
+    const campaignCollection = campaignConn.collection(emailId);
 
-  const bounces = await campaignCollection.distinct("recipientId", {
-    bounceStatus: "Yes",
-  });
+    // Total recipients who got a "sent"
+    const sentRecipients = await campaignCollection.distinct("recipientId", {
+      type: "sent",
+    });
+    const totalSent = sentRecipients.length;
 
-  const unsubscribeCount = unsubscribes.length;
-  const uniqueOpens = opens.length;
-  const totalOpens = opens.reduce((sum, o) => sum + o.count, 0);
-  const uniqueClicks = clicks.length;
-  const totalClicks = clicks.reduce((sum, c) => sum + c.count, 0);
-  // const totalSent = recipients.length;
-  const totalSent = resolvedRecipients.length;
-  const openRate = totalSent ? (uniqueOpens / totalSent) * 100 : 0;
-  const clickRate = totalSent ? (uniqueClicks / totalSent) * 100 : 0;
-  const bounceRate = totalSent ? (bounces.length / totalSent) * 100 : 0;
+    // Bounce breakdown
+    const hardBounceRecipients = await campaignCollection.distinct("recipientId", {
+      bounceStatus: { $in: ["Yes", "hard"] }, // legacy Yes = hard
+    });
+    const softBounceRecipients = await campaignCollection.distinct("recipientId", {
+      bounceStatus: "soft",
+    });
 
-  // 🔁 Replace lastActivity calculation with createdAt from Campaign model
-  const campaignSchema = new mongoose.Schema({}, { strict: false });
-  const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
-  const campaign = await Campaign.findOne({ emailId });
+    const hardBounceCount = hardBounceRecipients.length;
+    const softBounceCount = softBounceRecipients.length;
+    const totalBounces = hardBounceCount + softBounceCount;
 
-  const lastActivity = campaign?.createdAt || null;
+    // Metrics
+    const unsubscribeCount = unsubscribes.length;
+    const uniqueOpens = opens.length;
+    const totalOpens = opens.reduce((sum, o) => sum + o.count, 0);
+    const uniqueClicks = clicks.length;
+    const totalClicks = clicks.reduce((sum, c) => sum + c.count, 0);
 
-  res.json({
-    emailId,
-    totalSent,
-    uniqueOpens,
-    totalOpens,
-    uniqueClicks,
-    totalClicks,
-    openRate,
-    clickRate,
-    bounceRate,
-    unsubscribeCount,
-    lastActivity,
-  });
+    const openRate = totalSent ? (uniqueOpens / totalSent) * 100 : 0;
+    const clickRate = totalSent ? (uniqueClicks / totalSent) * 100 : 0;
+    const bounceRate = totalSent ? (totalBounces / totalSent) * 100 : 0;
+
+    // Campaign metadata
+    const campaignSchema = new mongoose.Schema({}, { strict: false });
+    const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
+    const campaign = await Campaign.findOne({ emailId });
+    const lastActivity = campaign?.createdAt || null;
+
+    res.json({
+      emailId,
+      totalSent,
+      uniqueOpens,
+      totalOpens,
+      uniqueClicks,
+      totalClicks,
+      openRate,
+      clickRate,
+      bounceRate,
+      hardBounceCount,
+      softBounceCount,
+      unsubscribeCount,
+      lastActivity,
+    });
+  } catch (err) {
+    console.error("Error in /campaign-analytics:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
+
 
 router.get("/campaign-details", async (req, res) => {
   const { emailId } = req.query;
@@ -1015,14 +1086,6 @@ router.get("/campaign-details", async (req, res) => {
       details[r].unsubscribe = true;
     }
 
-    // const status = sentStatuses[r] || "NA";
-    // if (status === "Yes") {
-    //   details[r].bounceStatus = "Yes";
-    // } else if (status === "No") {
-    //   details[r].bounceStatus = "No";
-    // } else {
-    //   details[r].bounceStatus = "NA";
-    // }
     const status = sentStatuses[r] || "NA";
     if (["Yes", "hard"].includes(status)) {
       details[r].bounceStatus = "hard"; // treat Yes as hard if legacy

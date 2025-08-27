@@ -50,8 +50,6 @@ const logSchema = new mongoose.Schema({
   device: String,
   browser: String,
   os: String,
-  // bounceStatus: { type: Boolean, default: false },
-  // bounceStatus: { type: String, enum: ["NA", "Yes", "No"], default: "NA" },
   bounceStatus: {
     type: String,
     enum: ["NA", "hard", "soft", "no", "dnd"],
@@ -62,7 +60,6 @@ logSchema.index({ emailId: 1, recipientId: 1, type: 1 }, { unique: true });
 const Log = campaignConn.model("Log", logSchema);
 
 const sesClient = new SESClient({
-  // region: process.env.AWS_REGION,
   region: process.env.FORCE_SES_REGION,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -91,8 +88,6 @@ async function logEvent(req, type) {
 
   // ✅ Add this block here
   if (type === "open") {
-    // Check if open happens too soon after "sent"
-    // const sentRow = await Log.findOne({ emailId, recipientId, type: "sent" });
     const sentRow = await Log.findOne(
       { emailId, recipientId, type: "sent" },
       {},
@@ -283,47 +278,46 @@ router.get("/track-click", async (req, res) => {
     }
 
     // 📧 Send thank-you mail
-    //   try {
-    //     // Find the campaign document to get the listName
-    //     const Campaign = campaignConn.model("Campaign", new mongoose.Schema({}, { strict: false }), "Campaign");
-    //     const campaignDoc = await Campaign.findOne({ emailId });
-    //     let listName = campaignDoc?.listName; // store listName in Campaign when creating campaign
+      try {
+        // Find the campaign document to get the listName
+        const Campaign = campaignConn.model("Campaign", new mongoose.Schema({}, { strict: false }), "Campaign");
+        const campaignDoc = await Campaign.findOne({ emailId });
+        let listName = campaignDoc?.listName; // store listName in Campaign when creating campaign
 
-    //     if (listName) {
-    //       // Fetch FirstName from contact list
-    //       const ContactModel = contactConn.model(listName, new mongoose.Schema({}, { strict: false }), listName);
-    //       const contact = await ContactModel.findOne({ Email: recipientId });
+        if (listName) {
+          // Fetch FirstName from contact list
+          const ContactModel = contactConn.model(listName, new mongoose.Schema({}, { strict: false }), listName);
+          const contact = await ContactModel.findOne({ Email: recipientId });
 
-    //       const firstName = contact?.FirstName || "there";
+          const firstName = contact?.FirstName || "there";
 
-    //       const thankYouBody = `
-    //         <!DOCTYPE html>
-    //         <html>
-    //           <body>
-    //             <p>Hi ${firstName},</p>
-    //             <p>Thank you for clicking our email. We appreciate your interest!</p>
-    //           </body>
-    //         </html>
-    //       `;
+          const thankYouBody = `
+            <!DOCTYPE html>
+            <html>
+              <body>
+                <p>Hi ${firstName},</p>
+                <p>Thank you for clicking our email. We appreciate your interest!</p>
+              </body>
+            </html>
+          `;
 
-    //       const params = {
-    //         Destination: { ToAddresses: [recipientId] },
-    //         Message: {
-    //           Body: { Html: { Charset: "UTF-8", Data: thankYouBody } },
-    //           Subject: { Charset: "UTF-8", Data: "Thank you for your interest" },
-    //         },
-    //         Source: process.env.FROM_EMAIL,
-    //       };
+          const params = {
+            Destination: { ToAddresses: [recipientId] },
+            Message: {
+              Body: { Html: { Charset: "UTF-8", Data: thankYouBody } },
+              Subject: { Charset: "UTF-8", Data: "Thank you for your interest" },
+            },
+            Source: process.env.FROM_EMAIL,
+          };
 
-    //       await sesClient.send(new SendEmailCommand(params));
-    //       console.log(`✅ Sent thank-you email to ${recipientId}`);
-    //     } else {
-    //       console.warn(`⚠️ No listName found for campaign ${emailId}, cannot send thank-you email`);
-    //     }
-    //   } catch (err) {
-    //     console.error(`❌ Failed to send thank-you email to ${recipientId}:`, err);
-    //   }
-    // }
+          await sesClient.send(new SendEmailCommand(params));
+          console.log(`✅ Sent thank-you email to ${recipientId}`);
+        } else {
+          console.warn(`⚠️ No listName found for campaign ${emailId}, cannot send thank-you email`);
+        }
+      } catch (err) {
+        console.error(`❌ Failed to send thank-you email to ${recipientId}:`, err);
+      }
 
     const target = redirect || "https://demandmediabpm.com/";
     return res.redirect(target);
@@ -1066,9 +1060,7 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
         }
 
         if (emailId && recipient) {
-          // const status = payload.notificationType === "Bounce" ? "Yes" : "No";
-          // const bounceType = payload.bounce?.bounceType; // "Permanent" | "Transient" | "Undetermined"
-          // const status = bounceType === "Permanent" ? "hard" : "soft";
+
           let status;
           if (payload.notificationType === "Bounce") {
             const bounceType = payload.bounce?.bounceType; // Permanent | Transient | Undetermined
@@ -1092,11 +1084,7 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
                 { $set: { bounceStatus: status } }
               ),
           ]);
-          // console.log(
-          //   `✅ ${
-          //     status === "Yes" ? "Bounce" : "Delivery"
-          //   } marked for ${recipient} in campaign ${emailId}`
-          // );
+
           console.log(
             `✅ ${status} marked for ${recipient} in campaign ${emailId}`
           );
@@ -1115,57 +1103,6 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
   }
 });
 
-// router.get("/campaign-analytics", async (req, res) => {
-//   const { emailId } = req.query;
-
-//   const [opens, clicks, unsubscribes] = await Promise.all([
-//     Log.find({ emailId, type: "open" }),
-//     Log.find({ emailId, type: "click" }),
-//     Log.find({ emailId, type: "unsubscribe" }),
-//   ]);
-
-//   const campaignCollection = campaignConn.collection(emailId);
-//   // const recipients = await campaignCollection.distinct("recipientId");
-//   const resolvedRecipients = await campaignCollection.distinct("recipientId", {
-//     bounceStatus: { $in: ["Yes", "No"] },
-//   });
-
-//   const bounces = await campaignCollection.distinct("recipientId", {
-//     bounceStatus: "Yes",
-//   });
-
-//   const unsubscribeCount = unsubscribes.length;
-//   const uniqueOpens = opens.length;
-//   const totalOpens = opens.reduce((sum, o) => sum + o.count, 0);
-//   const uniqueClicks = clicks.length;
-//   const totalClicks = clicks.reduce((sum, c) => sum + c.count, 0);
-//   // const totalSent = recipients.length;
-//   const totalSent = resolvedRecipients.length;
-//   const openRate = totalSent ? (uniqueOpens / totalSent) * 100 : 0;
-//   const clickRate = totalSent ? (uniqueClicks / totalSent) * 100 : 0;
-//   const bounceRate = totalSent ? (bounces.length / totalSent) * 100 : 0;
-
-//   // 🔁 Replace lastActivity calculation with createdAt from Campaign model
-//   const campaignSchema = new mongoose.Schema({}, { strict: false });
-//   const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
-//   const campaign = await Campaign.findOne({ emailId });
-
-//   const lastActivity = campaign?.createdAt || null;
-
-//   res.json({
-//     emailId,
-//     totalSent,
-//     uniqueOpens,
-//     totalOpens,
-//     uniqueClicks,
-//     totalClicks,
-//     openRate,
-//     clickRate,
-//     bounceRate,
-//     unsubscribeCount,
-//     lastActivity,
-//   });
-// });
 
 router.get("/campaign-analytics", async (req, res) => {
   try {
@@ -1341,10 +1278,6 @@ router.get("/contact-lists", async (_, res) => {
   }
 });
 
-// router.get("/track-unsubscribe", async (req, res) => {
-//   await logEvent(req, "unsubscribe");
-//   res.send("You have been unsubscribed from this campaign.");
-// });
 
 router.get("/track-unsubscribe", async (req, res) => {
   try {

@@ -453,11 +453,26 @@ async function sendCampaignNow({
     };
 
     const Campaign = campaignConn.model("Campaign", campaignSchema, "Campaign");
+    // await Campaign.updateOne(
+    //   { emailId },
+    //   {
+    //     $set: {
+    //       totalSent: recipients.length,
+    //       status: "pending",
+    //     },
+    //   }
+    // );
+
+    const actualRecipients = recipients.filter(
+      ({ Email }) =>
+        !unsubMap[Email.toLowerCase()] && !blockMap[Email.toLowerCase()]
+    );
+
     await Campaign.updateOne(
       { emailId },
       {
         $set: {
-          totalSent: recipients.length,
+          totalSent: actualRecipients.length,
           status: "pending",
         },
       }
@@ -510,7 +525,7 @@ async function sendCampaignNow({
           return {
             emailId,
             recipientId: Email,
-            type: "sent",
+            type: "skipped",
             timestamp: new Date(),
             sendAt: new Date(),
             count: 0,
@@ -534,7 +549,7 @@ async function sendCampaignNow({
           return {
             emailId,
             recipientId: Email,
-            type: "sent",
+            type: "skipped",
             timestamp: new Date(),
             sendAt: new Date(),
             count: 0,
@@ -587,7 +602,7 @@ async function sendCampaignNow({
           return {
             emailId,
             recipientId: Email,
-            type: "sent",
+            type: "skipped",
             timestamp: new Date(),
             sendAt: new Date(),
             count: 0,
@@ -601,7 +616,7 @@ async function sendCampaignNow({
           return {
             emailId,
             recipientId: Email,
-            type: "sent",
+            type: "skipped",
             timestamp: new Date(),
             sendAt: new Date(),
             count: 0,
@@ -713,7 +728,8 @@ async function sendCampaignNow({
               },
               { $set: { sendAt: exactSendTime } }
             ),
-            campaignConn.collection(emailId).updateOne(
+            // campaignConn.collection(emailId).updateOne(
+            PerCampaignModel.updateOne(
               {
                 emailId,
                 recipientId: { $regex: `^${to}$`, $options: "i" },
@@ -763,7 +779,8 @@ async function sendCampaignNow({
             },
             { $set: { bounceStatus: "soft" } }
           ),
-          campaignConn.collection(emailId).updateMany(
+          // campaignConn.collection(emailId).updateMany(
+          PerCampaignModel.updateMany(
             {
               bounceStatus: "NA",
               type: "sent",

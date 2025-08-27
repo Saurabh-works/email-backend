@@ -409,34 +409,63 @@ async function sendCampaignNow({
     );
     const recipients = await ContactModel.find({}, { Email: 1, FirstName: 1 });
 
-    const UnsubscribeModel = campaignConn.model(
-      "Unsubscribe",
-      new mongoose.Schema({}, { strict: false }),
-      "Unsubscribe"
-    );
+    // const UnsubscribeModel = campaignConn.model(
+    //   "Unsubscribe",
+    //   new mongoose.Schema({}, { strict: false }),
+    //   "Unsubscribe"
+    // );
 
-    const BlocklistModel = campaignConn.model(
-      "Blocklist",
+    // const BlocklistModel = campaignConn.model(
+    //   "Blocklist",
+    //   new mongoose.Schema({}, { strict: false }),
+    //   "Blocklist"
+    // );
+
+    // const unsubscribed = await UnsubscribeModel.find(
+    //   { email: { $in: recipients.map((r) => r.Email) } },
+    //   { email: 1, unsubscribeOn: 1 }
+    // );
+
+    // const blocked = await BlocklistModel.find(
+    //   { email: { $in: recipients.map((r) => r.Email) } },
+    //   { email: 1, createdAt: 1, type: 1 } // type = hard/soft
+    // );
+
+    // const unsubMap = Object.fromEntries(
+    //   unsubscribed.map((u) => [u.email.toLowerCase(), u.unsubscribeOn])
+    // );
+
+    // --- Unsubscribe list ---
+    const UnsubscribeModel = contactConn.model(
+      "unsubscribelist",
       new mongoose.Schema({}, { strict: false }),
-      "Blocklist"
+      "unsubscribelist"
     );
 
     const unsubscribed = await UnsubscribeModel.find(
-      { email: { $in: recipients.map((r) => r.Email) } },
-      { email: 1, unsubscribeOn: 1 }
-    );
-
-    const blocked = await BlocklistModel.find(
-      { email: { $in: recipients.map((r) => r.Email) } },
-      { email: 1, createdAt: 1, type: 1 } // type = hard/soft
+      { Email: { $in: recipients.map((r) => r.Email) } },
+      { Email: 1, UnsubscribeOn: 1 }
     );
 
     const unsubMap = Object.fromEntries(
-      unsubscribed.map((u) => [u.email.toLowerCase(), u.unsubscribeOn])
+      unsubscribed.map((u) => [u.Email.toLowerCase(), u.UnsubscribeOn])
     );
+
+    // --- Block list ---
+    const BlocklistModel = contactConn.model(
+      "BlockList",
+      new mongoose.Schema({}, { strict: false }),
+      "BlockList"
+    );
+
+    const blocked = await BlocklistModel.find(
+      { Email: { $in: recipients.map((r) => r.Email) } },
+      { Email: 1, createdAt: 1, type: 1 }
+    );
+
     const blockMap = Object.fromEntries(
       blocked.map((b) => [
-        b.email.toLowerCase(),
+        b.Email.toLowerCase(),
         { createdAt: b.createdAt, type: b.type },
       ])
     );

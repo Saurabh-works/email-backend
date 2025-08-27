@@ -409,6 +409,38 @@ async function sendCampaignNow({
     );
     const recipients = await ContactModel.find({}, { Email: 1, FirstName: 1 });
 
+    const UnsubscribeModel = campaignConn.model(
+      "Unsubscribe",
+      new mongoose.Schema({}, { strict: false }),
+      "Unsubscribe"
+    );
+
+    const BlocklistModel = campaignConn.model(
+      "Blocklist",
+      new mongoose.Schema({}, { strict: false }),
+      "Blocklist"
+    );
+
+    const unsubscribed = await UnsubscribeModel.find(
+      { email: { $in: recipients.map((r) => r.Email) } },
+      { email: 1, unsubscribeOn: 1 }
+    );
+
+    const blocked = await BlocklistModel.find(
+      { email: { $in: recipients.map((r) => r.Email) } },
+      { email: 1, createdAt: 1, type: 1 } // type = hard/soft
+    );
+
+    const unsubMap = Object.fromEntries(
+      unsubscribed.map((u) => [u.email.toLowerCase(), u.unsubscribeOn])
+    );
+    const blockMap = Object.fromEntries(
+      blocked.map((b) => [
+        b.email.toLowerCase(),
+        { createdAt: b.createdAt, type: b.type },
+      ])
+    );
+
     if (!recipients.length) {
       console.warn(`No recipients found for campaign ${emailId}`);
       return;
@@ -432,40 +464,164 @@ async function sendCampaignNow({
     );
 
     const PerCampaignModel = campaignConn.model(emailId, logSchema, emailId);
+    // await PerCampaignModel.insertMany(
+    //   recipients.map(({ Email }) => ({
+    //     emailId,
+    //     recipientId: Email,
+    //     type: "sent",
+    //     timestamp: new Date(),
+    //     sendAt: new Date(),
+    //     count: 0,
+    //     ip: "NA",
+    //     city: "NA",
+    //     region: "NA",
+    //     country: "NA",
+    //     device: "NA",
+    //     browser: "NA",
+    //     os: "NA",
+    //     bounceStatus: "NA",
+    //     unsubscribe: false,
+    //     openCount: 0,
+    //     clickCount: 0,
+    //     lastClickTime: null,
+    //   })),
+    //   { ordered: false }
+    // );
+
+    // await Log.insertMany(
+    //   recipients.map(({ Email }) => ({
+    //     emailId,
+    //     recipientId: Email,
+    //     type: "sent",
+    //     timestamp: new Date(),
+    //     sendAt: new Date(),
+    //     count: 0,
+    //     bounceStatus: "NA",
+    //   })),
+    //   { ordered: false }
+    // );
+
     await PerCampaignModel.insertMany(
-      recipients.map(({ Email }) => ({
-        emailId,
-        recipientId: Email,
-        type: "sent",
-        timestamp: new Date(),
-        sendAt: new Date(),
-        count: 0,
-        ip: "NA",
-        city: "NA",
-        region: "NA",
-        country: "NA",
-        device: "NA",
-        browser: "NA",
-        os: "NA",
-        bounceStatus: "NA",
-        unsubscribe: false,
-        openCount: 0,
-        clickCount: 0,
-        lastClickTime: null,
-      })),
+      recipients.map(({ Email }) => {
+        const emailKey = Email.toLowerCase();
+
+        // Unsubscribed case
+        if (unsubMap[emailKey]) {
+          return {
+            emailId,
+            recipientId: Email,
+            type: "sent",
+            timestamp: new Date(),
+            sendAt: new Date(),
+            count: 0,
+            ip: "NA",
+            city: "NA",
+            region: "NA",
+            country: "NA",
+            device: "NA",
+            browser: "NA",
+            os: "NA",
+            bounceStatus: "dnd",
+            unsubscribe: true,
+            openCount: 0,
+            clickCount: 0,
+            lastClickTime: null,
+          };
+        }
+
+        // Blocked/Bounced case
+        if (blockMap[emailKey]) {
+          return {
+            emailId,
+            recipientId: Email,
+            type: "sent",
+            timestamp: new Date(),
+            sendAt: new Date(),
+            count: 0,
+            ip: "NA",
+            city: "NA",
+            region: "NA",
+            country: "NA",
+            device: "NA",
+            browser: "NA",
+            os: "NA",
+            bounceStatus: "dnd", // "hard" or "soft"
+            unsubscribe: true,
+            openCount: 0,
+            clickCount: 0,
+            lastClickTime: null,
+          };
+        }
+
+        // Normal case
+        return {
+          emailId,
+          recipientId: Email,
+          type: "sent",
+          timestamp: new Date(),
+          sendAt: new Date(),
+          count: 0,
+          ip: "NA",
+          city: "NA",
+          region: "NA",
+          country: "NA",
+          device: "NA",
+          browser: "NA",
+          os: "NA",
+          bounceStatus: "NA",
+          unsubscribe: false,
+          openCount: 0,
+          clickCount: 0,
+          lastClickTime: null,
+        };
+      }),
       { ordered: false }
     );
 
     await Log.insertMany(
-      recipients.map(({ Email }) => ({
-        emailId,
-        recipientId: Email,
-        type: "sent",
-        timestamp: new Date(),
-        sendAt: new Date(),
-        count: 0,
-        bounceStatus: "NA",
-      })),
+      recipients.map(({ Email }) => {
+        const emailKey = Email.toLowerCase();
+
+        // Unsubscribed case
+        if (unsubMap[emailKey]) {
+          return {
+            emailId,
+            recipientId: Email,
+            type: "sent",
+            timestamp: new Date(),
+            sendAt: new Date(),
+            count: 0,
+            bounceStatus: "dnd",
+            unsubscribe: true,
+          };
+        }
+
+        // Blocked/Bounced case
+        if (blockMap[emailKey]) {
+          return {
+            emailId,
+            recipientId: Email,
+            type: "sent",
+            timestamp: new Date(),
+            sendAt: new Date(),
+            count: 0,
+            bounceStatus: "dnd",
+            unsubscribe: true,
+          };
+        }
+
+        // Normal case
+        return {
+          emailId,
+          recipientId: Email,
+          type: "sent",
+          timestamp: new Date(),
+          sendAt: new Date(),
+          count: 0,
+          bounceStatus: "NA",
+          unsubscribe: false,
+        };
+      }),
       { ordered: false }
     );
 
@@ -482,6 +638,12 @@ async function sendCampaignNow({
 
       const worker = async ({ Email: to, FirstName }) => {
         if (!to) return;
+
+        const emailKey = to.toLowerCase();
+        if (unsubMap[emailKey] || blockMap[emailKey]) {
+          console.log(`⏭️ Skipping ${to} (unsubscribed or blocked)`);
+          return;
+        }
 
         const pixelUrl = `https://truenotsendr.com/api/campaign/track-pixel?emailId=${encodeURIComponent(
           emailId
@@ -985,12 +1147,18 @@ router.get("/campaign-analytics", async (req, res) => {
     const totalSent = sentRecipients.length;
 
     // Bounce breakdown
-    const hardBounceRecipients = await campaignCollection.distinct("recipientId", {
-      bounceStatus: { $in: ["Yes", "hard"] }, // legacy Yes = hard
-    });
-    const softBounceRecipients = await campaignCollection.distinct("recipientId", {
-      bounceStatus: "soft",
-    });
+    const hardBounceRecipients = await campaignCollection.distinct(
+      "recipientId",
+      {
+        bounceStatus: { $in: ["Yes", "hard"] }, // legacy Yes = hard
+      }
+    );
+    const softBounceRecipients = await campaignCollection.distinct(
+      "recipientId",
+      {
+        bounceStatus: "soft",
+      }
+    );
 
     const hardBounceCount = hardBounceRecipients.length;
     const softBounceCount = softBounceRecipients.length;
@@ -1033,7 +1201,6 @@ router.get("/campaign-analytics", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 router.get("/campaign-details", async (req, res) => {
   const { emailId } = req.query;

@@ -1250,8 +1250,15 @@ router.get("/campaign-details", async (req, res) => {
 
   const details = {};
   // Get authoritative bounce status per recipient from "sent" logs
+  // const sentStatuses = {};
+  // for (const sentLog of logs.filter((l) => l.type === "sent")) {
+  //   sentStatuses[sentLog.recipientId] = sentLog.bounceStatus;
+  // }
+
   const sentStatuses = {};
-  for (const sentLog of logs.filter((l) => l.type === "sent")) {
+  for (const sentLog of logs.filter((l) =>
+    ["sent", "skipped"].includes(l.type)
+  )) {
     sentStatuses[sentLog.recipientId] = sentLog.bounceStatus;
   }
 
@@ -1301,6 +1308,8 @@ router.get("/campaign-details", async (req, res) => {
       details[r].bounceStatus = "soft";
     } else if (["No", "no"].includes(status)) {
       details[r].bounceStatus = "no";
+    } else if (status === "dnd") {
+      details[r].bounceStatus = "dnd";
     } else {
       details[r].bounceStatus = "NA";
     }

@@ -54,7 +54,7 @@ const logSchema = new mongoose.Schema({
   // bounceStatus: { type: String, enum: ["NA", "Yes", "No"], default: "NA" },
   bounceStatus: {
     type: String,
-    enum: ["NA", "hard", "soft", "no"],
+    enum: ["NA", "hard", "soft", "no", "dnd"],
     default: "NA",
   },
 });

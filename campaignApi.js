@@ -278,20 +278,28 @@ router.get("/track-click", async (req, res) => {
     }
 
     // 📧 Send thank-you mail
-      try {
-        // Find the campaign document to get the listName
-        const Campaign = campaignConn.model("Campaign", new mongoose.Schema({}, { strict: false }), "Campaign");
-        const campaignDoc = await Campaign.findOne({ emailId });
-        let listName = campaignDoc?.listName; // store listName in Campaign when creating campaign
+    try {
+      // Find the campaign document to get the listName
+      const Campaign = campaignConn.model(
+        "Campaign",
+        new mongoose.Schema({}, { strict: false }),
+        "Campaign"
+      );
+      const campaignDoc = await Campaign.findOne({ emailId });
+      let listName = campaignDoc?.listName; // store listName in Campaign when creating campaign
 
-        if (listName) {
-          // Fetch FirstName from contact list
-          const ContactModel = contactConn.model(listName, new mongoose.Schema({}, { strict: false }), listName);
-          const contact = await ContactModel.findOne({ Email: recipientId });
+      if (listName) {
+        // Fetch FirstName from contact list
+        const ContactModel = contactConn.model(
+          listName,
+          new mongoose.Schema({}, { strict: false }),
+          listName
+        );
+        const contact = await ContactModel.findOne({ Email: recipientId });
 
-          const firstName = contact?.FirstName || "there";
+        const firstName = contact?.FirstName || "there";
 
-          const thankYouBody = `
+        const thankYouBody = `
             <!DOCTYPE html>
             <html>
               <body>
@@ -301,23 +309,28 @@ router.get("/track-click", async (req, res) => {
             </html>
           `;
 
-          const params = {
-            Destination: { ToAddresses: [recipientId] },
-            Message: {
-              Body: { Html: { Charset: "UTF-8", Data: thankYouBody } },
-              Subject: { Charset: "UTF-8", Data: "Thank you for your interest" },
-            },
-            Source: process.env.FROM_EMAIL,
-          };
+        const params = {
+          Destination: { ToAddresses: [recipientId] },
+          Message: {
+            Body: { Html: { Charset: "UTF-8", Data: thankYouBody } },
+            Subject: { Charset: "UTF-8", Data: "Thank you for your interest" },
+          },
+          Source: process.env.FROM_EMAIL,
+        };
 
-          await sesClient.send(new SendEmailCommand(params));
-          console.log(`✅ Sent thank-you email to ${recipientId}`);
-        } else {
-          console.warn(`⚠️ No listName found for campaign ${emailId}, cannot send thank-you email`);
-        }
-      } catch (err) {
-        console.error(`❌ Failed to send thank-you email to ${recipientId}:`, err);
+        await sesClient.send(new SendEmailCommand(params));
+        console.log(`✅ Sent thank-you email to ${recipientId}`);
+      } else {
+        console.warn(
+          `⚠️ No listName found for campaign ${emailId}, cannot send thank-you email`
+        );
       }
+    } catch (err) {
+      console.error(
+        `❌ Failed to send thank-you email to ${recipientId}:`,
+        err
+      );
+    }
 
     const target = redirect || "https://demandmediabpm.com/";
     return res.redirect(target);
@@ -1060,7 +1073,6 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
         }
 
         if (emailId && recipient) {
-
           let status;
           if (payload.notificationType === "Bounce") {
             const bounceType = payload.bounce?.bounceType; // Permanent | Transient | Undetermined
@@ -1102,7 +1114,6 @@ router.post("/ses-webhook", express.text({ type: "*/*" }), async (req, res) => {
     res.status(500).send("Webhook processing failed");
   }
 });
-
 
 router.get("/campaign-analytics", async (req, res) => {
   try {
@@ -1186,12 +1197,6 @@ router.get("/campaign-details", async (req, res) => {
   const logs = await CampaignModel.find();
 
   const details = {};
-  // Get authoritative bounce status per recipient from "sent" logs
-  // const sentStatuses = {};
-  // for (const sentLog of logs.filter((l) => l.type === "sent")) {
-  //   sentStatuses[sentLog.recipientId] = sentLog.bounceStatus;
-  // }
-
   const sentStatuses = {};
   for (const sentLog of logs.filter((l) =>
     ["sent", "skipped"].includes(l.type)
@@ -1234,7 +1239,10 @@ router.get("/campaign-details", async (req, res) => {
       details[r].browser = log.browser || "NA";
       details[r].os = log.os || "NA";
     }
-    if (log.type === "unsubscribe") {
+    if (
+      log.type === "unsubscribe" ||
+      (log.type === "skipped" && log.unsubscribe)
+    ) {
       details[r].unsubscribe = true;
     }
 
@@ -1277,7 +1285,6 @@ router.get("/contact-lists", async (_, res) => {
     res.status(500).json({ error: "Server error", message: err.message });
   }
 });
-
 
 router.get("/track-unsubscribe", async (req, res) => {
   try {

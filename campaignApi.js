@@ -409,32 +409,6 @@ async function sendCampaignNow({
     );
     const recipients = await ContactModel.find({}, { Email: 1, FirstName: 1 });
 
-    // const UnsubscribeModel = campaignConn.model(
-    //   "Unsubscribe",
-    //   new mongoose.Schema({}, { strict: false }),
-    //   "Unsubscribe"
-    // );
-
-    // const BlocklistModel = campaignConn.model(
-    //   "Blocklist",
-    //   new mongoose.Schema({}, { strict: false }),
-    //   "Blocklist"
-    // );
-
-    // const unsubscribed = await UnsubscribeModel.find(
-    //   { email: { $in: recipients.map((r) => r.Email) } },
-    //   { email: 1, unsubscribeOn: 1 }
-    // );
-
-    // const blocked = await BlocklistModel.find(
-    //   { email: { $in: recipients.map((r) => r.Email) } },
-    //   { email: 1, createdAt: 1, type: 1 } // type = hard/soft
-    // );
-
-    // const unsubMap = Object.fromEntries(
-    //   unsubscribed.map((u) => [u.email.toLowerCase(), u.unsubscribeOn])
-    // );
-
     // --- Unsubscribe list ---
     const UnsubscribeModel = contactConn.model(
       "unsubscribelist",
@@ -750,21 +724,40 @@ async function sendCampaignNow({
           });
 
           const exactSendTime = new Date();
+          // await Promise.all([
+          //   Log.updateOne(
+          //     {
+          //       emailId,
+          //       recipientId: { $regex: `^${to}$`, $options: "i" },
+          //       type: "sent",
+          //     },
+          //     { $set: { sendAt: exactSendTime } }
+          //   ),
+          //   // campaignConn.collection(emailId).updateOne(
+          //   PerCampaignModel.updateOne(
+          //     {
+          //       emailId,
+          //       recipientId: { $regex: `^${to}$`, $options: "i" },
+          //       type: "sent",
+          //     },
+          //     { $set: { sendAt: exactSendTime } }
+          //   ),
+          // ]);
+
           await Promise.all([
             Log.updateOne(
               {
                 emailId,
                 recipientId: { $regex: `^${to}$`, $options: "i" },
-                type: "sent",
+                type: { $in: ["sent", "skipped"] }, // ✅ match both skipped
               },
               { $set: { sendAt: exactSendTime } }
             ),
-            // campaignConn.collection(emailId).updateOne(
             PerCampaignModel.updateOne(
               {
                 emailId,
                 recipientId: { $regex: `^${to}$`, $options: "i" },
-                type: "sent",
+                type: { $in: ["sent", "skipped"] }, // ✅ match both
               },
               { $set: { sendAt: exactSendTime } }
             ),

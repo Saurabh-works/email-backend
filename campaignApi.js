@@ -40,6 +40,7 @@ const logSchema = new mongoose.Schema({
   emailId: String,
   recipientId: String,
   type: String,
+  unsubscribe: { type: Boolean, default: false },
   count: { type: Number, default: 1 },
   timestamp: Date,
   sendAt: { type: Date },
@@ -1129,6 +1130,11 @@ router.get("/campaign-analytics", async (req, res) => {
     // Reference campaign-specific collection
     const campaignCollection = campaignConn.collection(emailId);
 
+    // 🔹 Add skipped unsubscribes from campaign-specific collection
+    const skippedUnsubs = await campaignCollection
+      .find({ type: "skipped", unsubscribe: true })
+      .toArray();
+
     // Total recipients who got a "sent"
     const sentRecipients = await campaignCollection.distinct("recipientId", {
       type: "sent",
@@ -1154,7 +1160,8 @@ router.get("/campaign-analytics", async (req, res) => {
     const totalBounces = hardBounceCount + softBounceCount;
 
     // Metrics
-    const unsubscribeCount = unsubscribes.length;
+    // const unsubscribeCount = unsubscribes.length;
+    const unsubscribeCount = unsubscribes.length + skippedUnsubs.length;
     const uniqueOpens = opens.length;
     const totalOpens = opens.reduce((sum, o) => sum + o.count, 0);
     const uniqueClicks = clicks.length;

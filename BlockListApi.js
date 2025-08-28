@@ -47,8 +47,7 @@ router.get("/list", async (req, res) => {
   }
 });
 
-// Search blocked contact(s) by email (case-insensitive)
-// Search blocked contact(s) by email (case-insensitive, only 5 latest)
+// Search blocked contact(s) by email (case-insensitive, indexed, latest 5 only)
 router.get("/search", async (req, res) => {
   try {
     const { email } = req.query;
@@ -57,16 +56,17 @@ router.get("/search", async (req, res) => {
     }
 
     const contacts = await BlockList.find({
-      Email: { $regex: email, $options: "i" },
+      Email: { $regex: `^${email}`, $options: "i" }, // starts with
     })
-      .sort({ createdAt: -1 }) // latest first
-      .limit(5); // only 5 results
+      .sort({ createdAt: -1 })
+      .limit(5);
 
     res.json(contacts);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 
 

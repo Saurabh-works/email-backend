@@ -53,6 +53,25 @@ router.post("/upload", async (req, res) => {
   }
 });
 
+// 📌 Search unsubscribed emails (latest 5, starts with query)
+router.get("/search", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.json([]);
+
+    const results = await UnsubscribeList.find({
+      Email: { $regex: `^${email}`, $options: "i" }, // case-insensitive, starts with
+    })
+      .sort({ createdAt: -1 }) // latest first
+      .limit(5);
+
+    res.json(results);
+  } catch (err) {
+    console.error("Error searching unsubscribe list:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // 📌 Remove from unsubscribe list
 router.delete("/remove/:id", async (req, res) => {
   try {

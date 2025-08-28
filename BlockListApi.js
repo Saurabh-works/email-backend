@@ -47,6 +47,29 @@ router.get("/list", async (req, res) => {
   }
 });
 
+// Search blocked contact(s) by email (case-insensitive)
+// Search blocked contact(s) by email (case-insensitive, only 5 latest)
+router.get("/search", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ error: "Email query required" });
+    }
+
+    const contacts = await BlockList.find({
+      Email: { $regex: email, $options: "i" },
+    })
+      .sort({ createdAt: -1 }) // latest first
+      .limit(5); // only 5 results
+
+    res.json(contacts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 // Delete blocked contact by ID
 router.delete("/remove/:id", async (req, res) => {
   try {

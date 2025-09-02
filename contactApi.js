@@ -56,14 +56,53 @@ router.post("/upload-contact", upload.single("file"), async (req, res) => {
 });
 
 // Get all contact lists
+// router.get("/lists", async (req, res) => {
+//   try {
+//     const collections = await conn.db.listCollections().toArray();
+//     const results = [];
+
+//     for (const col of collections) {
+//       if (col.name === "BlockList" || col.name === "unsubscribelist") continue;
+//       const Model = conn.model(col.name, new mongoose.Schema({}, { strict: false }), col.name);
+//       const count = await Model.countDocuments();
+//       const createdDoc = await Model.findOne().sort({ createdAt: 1 });
+
+//       results.push({
+//         listName: col.name,
+//         count,
+//         createdAt: createdDoc?.createdAt
+//           ? new Date(createdDoc.createdAt).toLocaleString()
+//           : "Unknown",
+//       });
+//     }
+
+//     res.json(results);
+//   } catch (err) {
+//     console.error("List fetch error:", err);
+//     res.status(500).json({ error: "Failed to fetch contact lists" });
+//   }
+// });
+
+// GET /lists?search=someName
 router.get("/lists", async (req, res) => {
   try {
+    const { search = "" } = req.query; // search term from query string
     const collections = await conn.db.listCollections().toArray();
     const results = [];
 
     for (const col of collections) {
       if (col.name === "BlockList" || col.name === "unsubscribelist") continue;
-      const Model = conn.model(col.name, new mongoose.Schema({}, { strict: false }), col.name);
+
+      // filter collections by search term
+      if (search && !col.name.toLowerCase().includes(search.toLowerCase())) {
+        continue;
+      }
+
+      const Model = conn.model(
+        col.name,
+        new mongoose.Schema({}, { strict: false }),
+        col.name
+      );
       const count = await Model.countDocuments();
       const createdDoc = await Model.findOne().sort({ createdAt: 1 });
 
@@ -82,6 +121,7 @@ router.get("/lists", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch contact lists" });
   }
 });
+
 
 // View data in a list
 router.get("/view-list-data", async (req, res) => {

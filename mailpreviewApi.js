@@ -29,6 +29,24 @@ const EmailTemplate = previewConnection.model(
 
 // Routes
 
+// 🔍 SEARCH by name
+router.get("/search", async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    let query = {};
+    if (q) {
+      query = { name: { $regex: q, $options: "i" } }; // case-insensitive search
+    }
+
+    const templates = await EmailTemplate.find(query).sort({ createdAt: -1 });
+    res.json(templates);
+  } catch (err) {
+    console.error("Search error:", err);
+    res.status(500).json({ error: "Failed to search templates" });
+  }
+});
+
 // GET all
 router.get("/", async (req, res) => {
   const templates = await EmailTemplate.find().sort({ createdAt: -1 });
@@ -95,6 +113,8 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete template" });
   }
 });
+
+
 
 
 // RENAME a template
